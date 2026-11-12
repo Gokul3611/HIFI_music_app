@@ -9,22 +9,22 @@ import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * High-performance, zero-overhead TCP audio streamer for ESP32 Hi-Fi.
  *
- * Transmits uncompressed 24-bit / 96 kHz PCM audio frames directly from
- * Stash's audio decoder to the ESP32-WROOM-32 over a local Wi-Fi Hotspot.
- * 
- * Bypasses Android's AudioTrack, AudioFlinger, and Bluetooth compression.
+ * Converts Media3 decoded audio (Float, Int16, Int24, Int32) into clean,
+ * little-endian 32-bit signed integer PCM frames expected by the ESP32 I2S
+ * DMA engine and PCM5102A DAC, and streams over TCP.
  */
 object Esp32SocketStreamer {
     private const val TAG = "Esp32SocketStreamer"
-    
-    // Default ESP32 hotspot gateway address and port
-    var espHost: String = "192.168.43.1"
-    var espPort: Int = 8888
+
+    // Default ESP32 hotspot IP address and port
+    @Volatile var espHost: String = "192.168.43.1"
+    @Volatile var espPort: Int = 8888
 
     private var socket: Socket? = null
     private var outputStream: OutputStream? = null
@@ -32,6 +32,9 @@ object Esp32SocketStreamer {
     val isConnected = AtomicBoolean(false)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    // Reusable conversion buffer on the audio thread (zero GC churn)
+    private var outBytes = ByteArray(16384)
 
     /**
      * Connects to the ESP32 audio receiver asynchronously.
@@ -44,27 +47,16 @@ object Esp32SocketStreamer {
             try {
                 Log.i(TAG, "Connecting to ESP32 Hi-Fi Audio Server at $host:$port...")
                 val sock = Socket()
-                sock.tcpNoDelay = true // Disable Nagle's algorithm for low-latency audio
-                sock.sendBufferSize = 64 * 1024 // 64 KB send buffer
+                sock.tcpNoDelay = true
+                sock.sendBufferSize = 64 * 1024
                 sock.connect(InetSocketAddress(host, port), 3000)
 
                 val os = sock.getOutputStream()
 
-                // Send 16-byte Hi-Fi Handshake Header:
-                // [4B Magic: 'HIFI'] [4B SampleRate: 96000] [2B BitDepth: 24] [2B Channels: 2] [4B Reserved: 0]
-                val header = ByteBuffer.allocate(16)
-                header.put("HIFI".toByteArray())
-                header.putInt(96000)
-                header.putShort(24.toShort())
-                header.putShort(2.toShort())
-                header.putInt(0)
-                os.write(header.array())
-                os.flush()
-
                 socket = sock
                 outputStream = os
                 isConnected.set(true)
-                Log.i(TAG, "Connected to ESP32! Bit-perfect 24/96 stream active.")
+                Log.i(TAG, "Connected to ESP32! Bit-perfect 32-bit PCM stream active.")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to connect to ESP32 ($host:$port): ${e.message}")
                 close()
@@ -75,9 +67,10 @@ object Esp32SocketStreamer {
     }
 
     /**
-     * Sends raw PCM byte buffer to ESP32 over TCP.
+     * Converts decoded Media3 ByteBuffer into 32-bit signed little-endian PCM
+     * and writes directly to the ESP32 socket.
      */
-    fun write(buffer: ByteBuffer) {
+    fun writePcm(buffer: ByteBuffer, inFormat: SampleFormat) {
         if (!isConnected.get()) {
             connect()
             return
@@ -85,22 +78,72 @@ object Esp32SocketStreamer {
 
         try {
             val os = outputStream ?: return
-            val length = buffer.remaining()
-            if (length == 0) return
+            val view = buffer.duplicate().order(ByteOrder.nativeOrder())
+            val remaining = view.remaining()
+            if (remaining == 0) return
 
-            // Write bytes directly without extra memory copy if backing array exists
-            if (buffer.hasArray()) {
-                val offset = buffer.arrayOffset() + buffer.position()
-                os.write(buffer.array(), offset, length)
-                buffer.position(buffer.position() + length)
-            } else {
-                val temp = ByteArray(length)
-                buffer.get(temp)
-                os.write(temp)
+            val byteCount: Int
+            when (inFormat) {
+                SampleFormat.INT32 -> {
+                    byteCount = remaining
+                    ensureBuffer(byteCount)
+                    view.get(outBytes, 0, byteCount)
+                }
+                SampleFormat.FLOAT -> {
+                    val sampleCount = remaining / 4
+                    byteCount = sampleCount * 4
+                    ensureBuffer(byteCount)
+                    val floats = view.asFloatBuffer()
+                    var outIdx = 0
+                    for (i in 0 until sampleCount) {
+                        val s = floats.get(i).coerceIn(-1.0f, 1.0f)
+                        val v = (s * 2147483647.0).toInt()
+                        outBytes[outIdx++] = (v and 0xFF).toByte()
+                        outBytes[outIdx++] = ((v ushr 8) and 0xFF).toByte()
+                        outBytes[outIdx++] = ((v ushr 16) and 0xFF).toByte()
+                        outBytes[outIdx++] = ((v ushr 24) and 0xFF).toByte()
+                    }
+                }
+                SampleFormat.INT24 -> {
+                    val sampleCount = remaining / 3
+                    byteCount = sampleCount * 4
+                    ensureBuffer(byteCount)
+                    var pos = view.position()
+                    var outIdx = 0
+                    for (i in 0 until sampleCount) {
+                        outBytes[outIdx++] = 0 // Pad LSB with 0x00 for 32-bit slot
+                        outBytes[outIdx++] = view.get(pos)
+                        outBytes[outIdx++] = view.get(pos + 1)
+                        outBytes[outIdx++] = view.get(pos + 2)
+                        pos += 3
+                    }
+                }
+                SampleFormat.INT16 -> {
+                    val sampleCount = remaining / 2
+                    byteCount = sampleCount * 4
+                    ensureBuffer(byteCount)
+                    val shorts = view.asShortBuffer()
+                    var outIdx = 0
+                    for (i in 0 until sampleCount) {
+                        val v = shorts.get(i).toInt() shl 16
+                        outBytes[outIdx++] = 0
+                        outBytes[outIdx++] = 0
+                        outBytes[outIdx++] = ((v ushr 16) and 0xFF).toByte()
+                        outBytes[outIdx++] = ((v ushr 24) and 0xFF).toByte()
+                    }
+                }
             }
+
+            os.write(outBytes, 0, byteCount)
         } catch (e: Exception) {
             Log.e(TAG, "Socket write error: ${e.message}. Reconnecting...")
             close()
+        }
+    }
+
+    private fun ensureBuffer(required: Int) {
+        if (outBytes.size < required) {
+            outBytes = ByteArray(required)
         }
     }
 
@@ -116,4 +159,3 @@ object Esp32SocketStreamer {
         socket = null
     }
 }
-

@@ -10,7 +10,7 @@
     <string name="home_song_card">%1$s by %2$s</string>
 
     <!-- App Bar & Help Menu -->
-    <string name="home_cd_wordmark" translatable="false">Stash</string>
+    <string name="home_cd_wordmark" translatable="false">Music</string>
     <string name="home_cd_discord">Join the Stash Discord</string>
     <string name="home_cd_help_menu">Report an issue or help translate</string>
     <string name="home_report_issue">Report an issue</string>
@@ -71,7 +71,7 @@
     <string name="home_hero_building_body">Fresh finds from what you listen to.</string>
     <string name="home_liked_songs">Liked Songs</string>
     <string name="home_personalize_title">Personalize your Home</string>
-    <string name="home_personalize_body">Connect a service and run a sync so Stash can tailor daily discovery to your taste.</string>
+    <string name="home_personalize_body">Connect a service and run a sync so Music can tailor daily discovery to your taste.</string>
     <string name="home_personalize_btn">Get started</string>
     <string name="home_cd_favorite">Favorite</string>
     <string name="home_mix_no_tracks_yet">No tracks yet</string>

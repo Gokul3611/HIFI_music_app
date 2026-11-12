@@ -402,8 +402,11 @@ class HiResOutputController @Inject constructor(
 
     private fun onModeChanged(newMode: HiResOutputMode) {
         if (newMode == mode) return
+        if (mode == HiResOutputMode.ESP32_WIFI_DIRECT && newMode != HiResOutputMode.ESP32_WIFI_DIRECT) {
+            Esp32SocketStreamer.close()
+        }
         mode = newMode
-        if (newMode == HiResOutputMode.STANDARD) releaseAll()
+        if (newMode == HiResOutputMode.STANDARD || newMode == HiResOutputMode.ESP32_WIFI_DIRECT) releaseAll()
         // A new mode asks for different things: let refused configurations be tried again.
         refusals.clear()
         recheckLiveOutputs()

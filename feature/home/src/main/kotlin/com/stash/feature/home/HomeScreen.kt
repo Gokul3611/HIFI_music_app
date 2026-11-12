@@ -277,31 +277,7 @@ fun HomeScreen(
     ) {
         // ── Supporter pill (full row) ─────────────────────────────────
         // v0.9.13: live data from TipJarRepository. Tap → ko-fi.
-        item {
-            val tipJar = uiState.tipJar
-            val pillSupporters = remember(tipJar) {
-                val live = tipJar.supporters.map {
-                    Supporter(name = it.name, amount = "$${it.amountUsd}", message = it.message)
-                }
-                // Legacy donors pre-date the Ko-fi webhook and exist nowhere
-                // in the Worker's KV — they always ride the tape (deduped in
-                // case they ever re-donate through the live pipeline).
-                val liveNames = live.map { it.name.lowercase() }.toSet()
-                live + LEGACY_SUPPORTERS.filter { it.name.lowercase() !in liveNames }
-            }
-            // Edge-to-edge: the ticker runs the full screen width, no card
-            // chrome — maximum runway for the scrolling messages.
-            SupporterTicker(
-                supporters = pillSupporters,
-                // Above the wordmark (owner, 2026-10-22): the title row's own padding spaces it.
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-
-        // ── App title row: wordmark + social icons ────────────────────
-        // v0.9.13: empty space to the right of the wordmark holds quick
-        // links to the project (GitHub, X). Supporter pill moves back
-        // to its own full-width row below.
+        // ── App title row: MUSIC wordmark + Offline/Online toggle ────────────
         item {
             Row(
                 modifier = Modifier
@@ -309,48 +285,24 @@ fun HomeScreen(
                     .padding(horizontal = 20.dp, vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // One ink (owner, 2026-10-11): white on dark / aubergine on light, and while a song
-                // plays the contrast-checked tint of its mood colour, crossfading over 800 ms. Read
-                // at draw time, so the crossfade redraws the wordmark without recomposing the feed.
-                val wordmark = painterResource(id = R.drawable.wordmark_stash)
                 val chrome = LocalAlbumChrome.current
-                val wordmarkDesc = stringResource(R.string.home_cd_wordmark)
-                Spacer(
-                    modifier = Modifier
-                        .height(37.dp)
-                        .aspectRatio(wordmark.intrinsicSize.width / wordmark.intrinsicSize.height)
-                        .semantics { contentDescription = wordmarkDesc }
-                        .drawBehind {
-                            with(wordmark) { draw(size, colorFilter = ColorFilter.tint(chrome.wordmark)) }
-                        },
+                Text(
+                    text = "MUSIC",
+                    fontFamily = SpaceGrotesk,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 26.sp,
+                    letterSpacing = 2.sp,
+                    color = chrome.wordmark,
                 )
                 Spacer(modifier = Modifier.weight(1f))
 
-                // Streaming-mode quick-access chip. Tap → opens the
-                // StreamingModeSheet for the picker. Gated on
-                // STREAMING_ENGINE_ENABLED inside the composable so it
-                // renders nothing when the flag is off.
+                // Single Offline / Online mode toggle button
                 StreamingModeChip(
                     streamingEnabled = streamingEnabled,
                     onClick = { showStreamingSheet = true },
                 )
 
-                Spacer(modifier = Modifier.width(8.dp))
-
-                val socialUriHandler = LocalUriHandler.current
-                androidx.compose.material3.IconButton(
-                    onClick = { socialUriHandler.openUri(STASH_DISCORD_URL) },
-                    modifier = Modifier.size(40.dp),
-                ) {
-                    androidx.compose.material3.Icon(
-                        painter = androidx.compose.ui.res.painterResource(
-                            id = com.stash.core.ui.R.drawable.ic_brand_discord,
-                        ),
-                        contentDescription = stringResource(R.string.home_cd_discord),
-                        tint = androidx.compose.ui.graphics.Color(0xFF5865F2),
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
+                Spacer(modifier = Modifier.width(4.dp))
 
                 var showHelpMenu by remember { mutableStateOf(false) }
                 Box {
