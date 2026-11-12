@@ -269,7 +269,7 @@ class HiResOutputController @Inject constructor(
         val device = routedDevice(attributes)
         fun shared(reason: MixerDecision.Reason) =
             OutputPlan(MixerDecision.Shared(reason), SampleFormat.FLOAT, device, null)
-        if (m == HiResOutputMode.STANDARD) return shared(MixerDecision.Reason.MODE_STANDARD)
+        if (m == HiResOutputMode.STANDARD || m == HiResOutputMode.ESP32_WIFI_DIRECT) return shared(MixerDecision.Reason.MODE_STANDARD)
         if (Build.VERSION.SDK_INT < 34) return shared(MixerDecision.Reason.UNSUPPORTED_ANDROID)
         if (attributes.usage != AudioAttributes.USAGE_MEDIA) return shared(MixerDecision.Reason.NOT_MEDIA_USAGE)
         if (device == null || !device.isUsb()) return shared(MixerDecision.Reason.NOT_USB)
