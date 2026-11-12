@@ -155,8 +155,7 @@ fun SettingsHubScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         // No "Settings" title: the tab bar already says where you are.
-        val support by supportCard.state.collectAsStateWithLifecycle()
-        SupportBanner(state = support, onOpenUrl = onOpenUrl)
+        // Sponsor banner disabled
         SettingsSearchField(
             value = searchQuery,
             onValueChange = { searchQuery = it },

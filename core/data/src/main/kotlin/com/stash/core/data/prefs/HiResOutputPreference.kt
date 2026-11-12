@@ -31,6 +31,12 @@ enum class HiResOutputMode {
      * mixing, no software volume, no EQ — volume is the DAC's own.
      */
     BIT_PERFECT,
+
+    /**
+     * Bit-perfect 24-bit/96kHz uncompressed streaming directly to an ESP32
+     * over local Wi-Fi Hotspot (bypassing Android AudioTrack and USB limits).
+     */
+    ESP32_WIFI_DIRECT,
 }
 
 /**

@@ -96,8 +96,8 @@ fun SettingsLosslessSourcesScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                // Unlimited for Ko-fi supporters: the claim, or the relay's "supporter" status.
-                SupporterSection()
+                // Unlimited for Ko-fi supporters section disabled
+                // SupporterSection()
 
                 // Direct Qobuz — the listener's own account, signed
                 // locally against www.qobuz.com. The warning shows when no

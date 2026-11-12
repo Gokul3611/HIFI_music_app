@@ -56,13 +56,12 @@ fun HiResOutputRow(viewModel: HiResOutputViewModel = hiltViewModel()) {
 
     SettingsValueRow(
         title = stringResource(R.string.settings_hires_output_title),
-        value = stringResource(
-            when (mode) {
-                HiResOutputMode.STANDARD -> R.string.settings_hires_mode_standard
-                HiResOutputMode.MATCH_RATE -> R.string.settings_hires_value_match_rate
-                HiResOutputMode.BIT_PERFECT -> R.string.settings_hires_value_bit_perfect
-            },
-        ),
+        value = when (mode) {
+            HiResOutputMode.STANDARD -> stringResource(R.string.settings_hires_mode_standard)
+            HiResOutputMode.MATCH_RATE -> stringResource(R.string.settings_hires_value_match_rate)
+            HiResOutputMode.BIT_PERFECT -> stringResource(R.string.settings_hires_value_bit_perfect)
+            HiResOutputMode.ESP32_WIFI_DIRECT -> "ESP32 Hi-Fi Direct"
+        },
         subtitle = verdictText,
         onClick = { sheetOpen = true },
     )
@@ -95,6 +94,12 @@ fun HiResOutputRow(viewModel: HiResOutputViewModel = hiltViewModel()) {
                     stringResource(R.string.settings_hires_mode_bit_perfect),
                     if (supported) stringResource(R.string.settings_hires_mode_bit_perfect_desc) else unsupported,
                     enabled = supported,
+                ),
+                SettingsChoice(
+                    HiResOutputMode.ESP32_WIFI_DIRECT,
+                    "ESP32 Hi-Fi Direct (Wi-Fi Hotspot)",
+                    "Streams uncompressed 24-bit/96kHz bit-perfect audio directly to ESP32 over local Wi-Fi Hotspot without Bluetooth compression",
+                    enabled = true,
                 ),
             ),
             selected = mode,
