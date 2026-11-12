@@ -20,6 +20,16 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Configure 8GB Swap Space (Prevent OOM Killer)
+        run: |
+          sudo swapoff -a || true
+          sudo rm -f /swapfile || true
+          sudo fallocate -l 8G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -38,11 +48,25 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.0.12077973" "cmake;3.22.1" > /dev/null
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: ./gradlew assembleDebug --no-daemon --no-parallel --max-workers=2 --stacktrace
+
+      - name: Prepare APK for Artifact
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/*.apk dist/Music.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Music-HiFi-App
-          path: app/build/outputs/apk/debug/*.apk
+          path: dist/Music.apk
           retention-days: 14
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/heads/master') || startsWith(github.ref, 'refs/heads/main')
+        with:
+          tag_name: latest
+          name: "Music Hi-Fi v0.9.124"
+          body: "Minimalist bit-perfect Hi-Fi Music app with ESP32 Hotspot Direct streaming."
+          files: dist/Music.apk

@@ -187,7 +187,7 @@ fun HiResOutputRow(viewModel: HiResOutputViewModel = hiltViewModel()) {
                     Row(modifier = Modifier.fillMaxWidth()) {
                         OutlinedButton(
                             onClick = {
-                                val intent = Intent(Settings.ACTION_WIRELESS_SETTINGS).apply {
+                                val intent = Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS).apply {
                                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                                 }
                                 context.startActivity(intent)
