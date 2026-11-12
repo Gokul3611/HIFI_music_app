@@ -15,7 +15,7 @@
 
 ---
 
-[**Quick Install (.apk)**](#-quick-start--installation) • [**Architecture**](#-system-architecture) • [**Hardware Build Guide**](#-esp32--pcm5102a-hardware-guide) • [**Developer Guide**](#-developer--build-guide) • [**Contributing**](#-contributing)
+[**Quick Install (.apk)**](#-quick-start--installation) • [**ESP32 Setup Guide**](ESP32_SETUP.md) • [**Architecture**](#-system-architecture) • [**Developer Guide**](#-developer--build-guide) • [**Contributing**](CONTRIBUTING.md)
 
 </div>
 
