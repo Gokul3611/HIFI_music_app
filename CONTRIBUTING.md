@@ -1,173 +1,100 @@
-# Contributing to Stash
+# Contributing to Music & Hi-Fi DAC
 
-Thanks for your interest in improving Stash. This guide covers how to build the app, how the codebase is laid out, and how to get a change merged.
+Thank you for your interest in contributing to **Music**! This document provides guidelines and instructions for contributing to the application and its companion ESP32 firmware.
 
-Stash is GPL-3.0. By contributing, you agree that your contributions are licensed under the same terms.
-
----
-
-## Before you write code
-
-**For anything substantial, open an issue (or ask on [Discord](https://discord.gg/vcbjEby5PC)) first.** A quick conversation about the approach saves everyone time — it's no fun to sink a weekend into a PR only to find the change doesn't fit the direction of the project. Small, obvious fixes (typos, crashes with a clear cause, a one-line bug) can go straight to a PR.
-
-Good first contributions:
-
-- Bug fixes with a clear reproduction
-- Documentation improvements
-- Small, self-contained UI polish
-- Test coverage for existing behavior
+By contributing to this repository, you agree that your contributions will be licensed under the **GNU General Public License v3.0 (GPL-3.0)**.
 
 ---
 
-## Building the app
+## 🧭 Code of Conduct & Principles
 
-You'll need:
+1. **Zero Compromise on Quality:** We strive for bit-perfect, uncompressed audio fidelity. DSP features must be cleanly bypassable and maintain 24-bit dynamic range without unwanted clipping or resampling.
+2. **Privacy First:** The app contains zero tracking, zero analytics SDKs, and zero telemetry. All logins and tokens stay encrypted locally via Android Keystore / Tink.
+3. **Clean, Minimalist Aesthetics:** UI elements must be uncluttered, responsive, and purposeful. No advertising, sponsor tickers, or nag screens.
 
-- **Android Studio** Hedgehog (2023.1.1) or later
-- **JDK 17**
-- **Android SDK 35**
+---
 
+## 🛠️ Local Development Environment
+
+### Requirements
+- **JDK 17** (Temurin, Microsoft, or Azul Zulu)
+- **Android Studio** Hedgehog (2023.1.1) or newer
+- **Android SDK 35** (`platforms;android-35`)
+- **Android NDK 27** (`ndk;27.0.12077973`)
+- **CMake 3.22.1**
+- *(Optional for firmware)* **Arduino IDE 2.x** or **ESP-IDF v5.1+**
+
+### Cloning & Building
 ```bash
-git clone https://github.com/rawnaldclark/Stash.git
-cd Stash
+# Clone the repository
+git clone https://github.com/Gokul3611/HIFI_music_app.git
+cd HIFI_music_app
+
+# Build debug APK
 ./gradlew assembleDebug
-# APK lands in app/build/outputs/apk/debug/
-```
 
-To install straight to a connected device:
-
-```bash
-./gradlew installDebug
-```
-
-Run the unit tests:
-
-```bash
+# Run unit tests
 ./gradlew test
 ```
 
-> **Note:** Stash talks to third-party music services using your own login cookies (see the [README](README.md) for how that works). You don't need any of that configured to build the app or work on most of the codebase — only to exercise the sync/streaming paths end to end on a device.
+The compiled debug APK will be generated at:
+`app/build/outputs/apk/debug/app-debug.apk`
 
 ---
 
-## Debug builds
+## 📁 Repository Structure
 
-Debug builds are signed with a keystore committed to the repo
-(`debug.keystore`, repo root) so every contributor and CI produce
-identically-signed debug APKs — this avoids `INSTALL_FAILED_UPDATE_INCOMPATIBLE`
-when installing across machines or user profiles (e.g. Samsung Secure Folder).
-
-This is a standard debug key with the well-known AOSP password (`android`) —
-committing it is normal practice, not a credential leak. It only affects
-local/debug installs; release signing is unaffected and uses separate,
-non-committed credentials.
-
-**One-time migration:** if you have a debug build installed from before this
-change, you'll need to uninstall it once before installing a build signed
-with the new key. Uninstalling wipes app data, so do this first:
-
-1. **Settings → Library & Storage → Export Backup.** Pick *Everything* (or
-   *Liked songs only* if that is all you care about). The file lands wherever
-   you save it and survives the uninstall.
-2. Uninstall, install the new build, then **Import Backup** and choose
-   *Merge into library* — it cannot delete anything.
-3. **Reconnect your accounts.** Logins are the one thing a backup cannot
-   restore: the token keyset is wrapped by an Android Keystore key that
-   uninstalling destroys, so the restored blobs decrypt to nothing.
-4. Downloaded audio is not in the archive — it is tens of gigabytes and lives
-   in app-internal storage. The library remembers what it had, so
-   **Settings → Library & Storage → Library Health → Missing downloads**
-   offers to fetch them all back once the accounts are connected.
-
-## Release builds (R8)
-
-Release builds are shrunk by R8: it removes the code and resources nothing uses and optimizes the rest, but
-renames nothing. Its rules live in `app/proguard-rules.pro`, plus a module's own `consumer-rules.pro` for that
-module's lookups by name.
-
-- **Try a rule change on a phone:** `./gradlew :app:assembleDebug -Pstash.minifyDebug=true` builds the everyday
-  debug app shrunk with the release rules (same app id, key and data). It is not debuggable, so `adb shell run-as`
-  doesn't work while it is installed.
-- **Read a release crash trace:** most methods in a release build carry no line table, so frames print as
-  instruction offsets, and inlined code is listed under the method it was folded into. Each GitHub release has that
-  build's `mapping-<tag>.txt.gz`; pick the tag from the crash file's `App version` line. With the Android SDK
-  Command-line Tools installed (SDK Manager › SDK Tools), unzip it and run:
-
-  ```bash
-  gh release download v0.9.125 -p 'mapping-*.txt.gz' && gunzip mapping-v0.9.125.txt.gz
-  retrace mapping-v0.9.125.txt crash.txt
-  ```
-
-  `retrace` is in `<sdk>/cmdline-tools/latest/bin/`. It prints the trace with source lines and the inlined frames
-  restored. Without the Command-line Tools, the same retrace ships inside the Android Gradle plugin jar a build has
-  already downloaded (use the `agp` version from `gradle/libs.versions.toml`):
-
-  ```bash
-  java -cp ~/.gradle/caches/modules-2/files-2.1/com.android.tools.build/builder/8.9.1/*/builder-8.9.1.jar \
-    com.android.tools.r8.retrace.Retrace mapping-v0.9.125.txt crash.txt
-  ```
-
-## How the codebase is organized
-
-Stash is a multi-module Gradle project. Modules keep responsibilities isolated so a change in one place doesn't ripple everywhere. From the top:
-
-### `:app`
-The application shell — dependency-injection wiring (Hilt), top-level navigation, and the `Application` class. Thin by design; the real work lives in the modules below.
-
-### `:core:*` — shared foundations
-| Module | Responsibility |
-| --- | --- |
-| `:core:ui` | Design system: Compose components, theme, shared UI building blocks |
-| `:core:model` | Plain domain models shared across the app |
-| `:core:common` | Cross-cutting utilities and helpers |
-| `:core:data` | Persistence (database, preferences) and repository plumbing |
-| `:core:media` | Playback — Media3/ExoPlayer, the player service, audio processing |
-| `:core:auth` | Encrypted on-device credential storage (Tink, AES-256-GCM) |
-| `:core:network` | HTTP clients and networking primitives |
-
-### `:data:*` — external integrations
-| Module | Responsibility |
-| --- | --- |
-| `:data:spotify` | Spotify library sync and resolution |
-| `:data:ytmusic` | YouTube Music library sync and resolution |
-| `:data:download` | The download pipeline (including yt-dlp) |
-| `:data:lyrics` | Lyrics fetching and parsing (LRCLIB) |
-
-### `:feature:*` — user-facing screens
-Each feature module owns one area of the app: `:feature:home`, `:feature:library`, `:feature:nowplaying`, `:feature:sync`, `:feature:settings`, and `:feature:search`. Feature modules depend on `:core:*` and `:data:*`, never on each other.
-
-### Other top-level directories
-- `build-logic/` — Gradle convention plugins shared across modules
-- `infra/` — small server-side helpers (Cloudflare Workers) that back some features
-- `docs/` — project documentation
+```
+HIFI_music_app/
+├── app/                      # Application orchestrator, Hilt DI graph, launcher activities
+├── core/
+│   ├── media/                # Audio engine (Media3, Esp32SocketStreamer, PCM conversion)
+│   ├── ui/                   # Jetpack Compose design system and custom components
+│   ├── data/                 # DataStore repositories (HiResOutputPreference, offline cache)
+│   ├── model/                # Core domain models (Track, Album, QualityTier)
+│   ├── common/               # Shared utilities, constants, and extensions
+│   └── network/              # Fast, low-overhead HTTP / socket networking
+├── feature/
+│   ├── home/                 # Main home screen, quick Offline/Online toggle
+│   ├── settings/             # Settings screen, ESP32 hotspot guide, audio output picker
+│   ├── nowplaying/           # Player screen with word-synced lyrics (LRCLIB)
+│   └── library/              # Local audio library indexing & playlist management
+└── firmware_wifi_softap/     # ESP32 + PCM5102A Arduino sketch (TCP port 8888, 96 kHz / 32-bit I2S)
+```
 
 ---
 
-## Coding conventions
+## 🚀 Contribution Workflow
 
-- **Kotlin**, Jetpack Compose for UI, Hilt for DI, Coroutines/Flow for async.
-- Match the style of the code around you — naming, formatting, and patterns. When in doubt, look at a neighboring file.
-- Keep modules honest: put shared code in `:core`, feature code in `:feature`, integration code in `:data`. Don't reach across feature modules.
-- Prefer small, focused changes. One PR should do one thing.
+1. **Check Existing Issues:** Before starting major work, please search the [GitHub Issues](https://github.com/Gokul3611/HIFI_music_app/issues) to ensure someone else isn't already working on it.
+2. **Create a Branch:**
+   ```bash
+   git checkout -b feature/your-feature-name
+   # or
+   git checkout -b fix/issue-description
+   ```
+3. **Write Tests:** If introducing new logic or altering audio conversions, add appropriate unit tests in `:core:media` or the affected module.
+4. **Follow Kotlin Conventions:**
+   - Use standard Kotlin style (`kotlin.code.style=official`).
+   - Keep coroutines structured on appropriate dispatchers (`Dispatchers.IO` for socket/disk, `Dispatchers.Default` for DSP calculations).
+5. **Verify Before Pushing:**
+   ```bash
+   ./gradlew test
+   ./gradlew assembleDebug
+   ```
+6. **Submit a Pull Request:** Open a PR against the `master` branch. Clearly describe the problem solved, testing conducted, and any hardware validated.
 
 ---
 
-## Submitting a pull request
+## 🎯 Open Roadmap & Ideas
 
-1. Fork the repo and create a branch from `master` (e.g. `fix/playback-crash` or `feat/queue-shuffle`).
-2. Make your change. Add or update tests where it makes sense.
-3. Make sure `./gradlew test` passes and the app builds.
-4. Open the PR against `master` and fill out the PR template — especially **what you tested and on which device**. "It compiles" isn't testing.
-5. Keep the PR focused. Unrelated cleanup belongs in its own PR.
-
-A maintainer will review as time allows. This is a small project, so please be patient — and thank you for helping.
+We are actively seeking contributions in the following areas:
+- **Automatic mDNS Discovery:** Broadcast `_esp32_audio._tcp.local` from the ESP32 so the Android app automatically discovers the DAC without manual IP entry.
+- **Parametric EQ & AutoEQ Integration:** Allow importing AutoEQ frequency response corrections for specific headphone models.
+- **Lockless DSP Limiter Profiles:** Expand the C/C++ audio limiter for customizable attack, decay, and knee parameters.
+- **Desktop Companion Client:** Lightweight cross-platform desktop streamer (Electron/Tauri or Python) targeting the same ESP32 port 8888 receiver.
 
 ---
 
-## Reporting bugs and requesting features
-
-Please use the [issue forms](https://github.com/rawnaldclark/Stash/issues/new/choose) — they ask for the details (version, device, repro steps) that make a report actionable. For questions, setup help, or open-ended ideas, the [Discord](https://discord.gg/vcbjEby5PC) is the right place.
-
-## Security issues
-
-Do **not** open a public issue for security vulnerabilities. Follow the disclosure process in [SECURITY.md](SECURITY.md).
+## ⚖️ License
+By contributing, you agree that your code will be licensed under the **GNU General Public License v3.0**.
