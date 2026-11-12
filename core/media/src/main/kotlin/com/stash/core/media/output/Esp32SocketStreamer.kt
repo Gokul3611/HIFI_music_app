@@ -111,7 +111,7 @@ object Esp32SocketStreamer {
                     var pos = view.position()
                     var outIdx = 0
                     for (i in 0 until sampleCount) {
-                        outBytes[outIdx++] = 0 // Pad LSB with 0x00 for 32-bit slot
+                        outBytes[outIdx++] = 0.toByte() // Pad LSB with 0x00 for 32-bit slot
                         outBytes[outIdx++] = view.get(pos)
                         outBytes[outIdx++] = view.get(pos + 1)
                         outBytes[outIdx++] = view.get(pos + 2)
@@ -126,8 +126,8 @@ object Esp32SocketStreamer {
                     var outIdx = 0
                     for (i in 0 until sampleCount) {
                         val v = shorts.get(i).toInt() shl 16
-                        outBytes[outIdx++] = 0
-                        outBytes[outIdx++] = 0
+                        outBytes[outIdx++] = 0.toByte()
+                        outBytes[outIdx++] = 0.toByte()
                         outBytes[outIdx++] = ((v ushr 16) and 0xFF).toByte()
                         outBytes[outIdx++] = ((v ushr 24) and 0xFF).toByte()
                     }

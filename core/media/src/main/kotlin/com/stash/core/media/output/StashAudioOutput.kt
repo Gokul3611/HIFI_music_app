@@ -177,11 +177,9 @@ class StashAudioOutput(
         val softVolume = bitPerfect && (playerVolume != 1f || volume.isActive)
         val before = buffer.position()
 
-        // ESP32 Wi-Fi Direct: Stream uncompressed 32-bit PCM to ESP32 socket and mute phone speaker
-        val esp32Direct = controller.mode == com.stash.core.data.prefs.HiResOutputMode.ESP32_WIFI_DIRECT
-        if (esp32Direct) {
+        // ESP32 Wi-Fi Direct: Stream uncompressed 32-bit PCM to ESP32 socket
+        if (controller.mode == com.stash.core.data.prefs.HiResOutputMode.ESP32_WIFI_DIRECT) {
             Esp32SocketStreamer.writePcm(buffer, inFormat)
-            inner.setVolume(0f)
         }
 
         val handled = if (!writer.hasPending && !dspOn && !softVolume && inFormat == outFormat) {
@@ -212,6 +210,9 @@ class StashAudioOutput(
 
     override fun play() {
         playing = true
+        if (controller.mode == com.stash.core.data.prefs.HiResOutputMode.ESP32_WIFI_DIRECT) {
+            inner.setVolume(0f)
+        }
         controller.activate(this)
         super.play()
     }
@@ -236,7 +237,9 @@ class StashAudioOutput(
 
     override fun setVolume(volume: Float) {
         playerVolume = volume
-        if (bitPerfect) {
+        if (controller.mode == com.stash.core.data.prefs.HiResOutputMode.ESP32_WIFI_DIRECT) {
+            inner.setVolume(0f)
+        } else if (bitPerfect) {
             // Android applies no volume to a bit-perfect stream: do it here,
             // ramped, and keep the track itself at unity.
             this.volume.setTarget(volume)
