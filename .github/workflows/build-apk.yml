@@ -4,7 +4,8 @@ on:
   workflow_dispatch: # Allows manual trigger from GitHub UI
   push:
     branches:
-      - '**'
+      - master
+      - main
 
 permissions:
   contents: write
@@ -43,3 +44,4 @@ jobs:
           name: Music-HiFi-App
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 14
+
