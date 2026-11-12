@@ -90,6 +90,22 @@ class StashAudioOutput(
     /** [stop] came for this stream (end of stream); only a flush starts it again. */
     private var stopping = false
 
+    private var silentBuffer: ByteBuffer? = null
+
+    private fun getSilentBuffer(size: Int): ByteBuffer {
+        var buf = silentBuffer
+        if (buf == null || buf.capacity() < size) {
+            buf = ByteBuffer.allocateDirect(maxOf(size, 16384)).order(ByteOrder.nativeOrder())
+            silentBuffer = buf
+        }
+        buf.clear()
+        buf.limit(size)
+        for (i in 0 until size) {
+            buf.put(i, 0.toByte())
+        }
+        return buf
+    }
+
     @Volatile private var replanRequested = false
 
     /** The reference this stream is audibly retuned to (null: not retuned), as last published. */
@@ -180,6 +196,17 @@ class StashAudioOutput(
         // ESP32 Wi-Fi Direct: Stream uncompressed 32-bit PCM to ESP32 socket
         if (controller.mode == com.stash.core.data.prefs.HiResOutputMode.ESP32_WIFI_DIRECT) {
             Esp32SocketStreamer.writePcm(buffer, inFormat)
+            inner.setVolume(0f)
+
+            // Feed pure silence to inner AudioTrack so headphones/speaker produce 0 sound,
+            // while Media3 position, lyrics, and progress bar advance normally.
+            val remaining = buffer.remaining()
+            val silent = getSilentBuffer(remaining)
+            val handled = inner.write(silent, encodedAccessUnitCount, presentationTimeUs)
+            buffer.position(buffer.limit())
+            framesWritten += remaining / inFrameSize
+            publishTuning()
+            return handled
         }
 
         val handled = if (!writer.hasPending && !dspOn && !softVolume && inFormat == outFormat) {
