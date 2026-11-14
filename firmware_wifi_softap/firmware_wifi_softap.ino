@@ -53,8 +53,8 @@ static uint8_t s_dma_chunk[DMA_CHUNK_SIZE] __attribute__((aligned(4)));
 static uint16_t s_dac_chunk[DMA_CHUNK_SIZE / 2] __attribute__((aligned(4)));
 static uint8_t s_rx_buf[4096] __attribute__((aligned(4)));
 
-// Active Hardware State
-static volatile uint8_t s_active_mode = MODE_EXTERNAL_PCM5102A;
+// Active Hardware State (Default: Internal Built-in DAC for testing without external board)
+static volatile uint8_t s_active_mode = MODE_INTERNAL_ESP32_DAC;
 static volatile bool s_i2s_initialized = false;
 static portMUX_TYPE s_mode_mux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -211,8 +211,8 @@ void setup() {
     Serial.println("  ESP32 Audiophile Dual-Mode Wireless Audio Receiver   ");
     Serial.println("=======================================================");
 
-    // Initialize with default mode (PCM5102A)
-    configureI2SHardware(MODE_EXTERNAL_PCM5102A);
+    // Initialize with default mode (Internal Built-in DAC for testing without external board)
+    configureI2SHardware(MODE_INTERNAL_ESP32_DAC);
 
     // Launch Audio DMA Task pinned to Core 1 (Isolated from Wi-Fi stack on Core 0)
     xTaskCreatePinnedToCore(
@@ -274,17 +274,19 @@ void loop() {
             if (available > 0) {
                 // Check if this is an 8-byte control packet: 'H','I','F','I', mode, 0, 0, 0
                 if (available >= 8 && client.peek() == 'H') {
-                    uint8_t probe[4];
-                    client.peekBytes((char*)probe, 4);
-                    if (probe[0] == 'H' && probe[1] == 'I' && probe[2] == 'F' && probe[3] == 'I') {
-                        uint8_t ctrl[8];
-                        client.read(ctrl, 8);
+                    uint8_t ctrl[8];
+                    int n = client.readBytes((char*)ctrl, 8);
+                    if (n == 8 && ctrl[0] == 'H' && ctrl[1] == 'I' && ctrl[2] == 'F' && ctrl[3] == 'I') {
                         uint8_t new_mode = ctrl[4];
                         if (new_mode == MODE_EXTERNAL_PCM5102A || new_mode == MODE_INTERNAL_ESP32_DAC) {
                             if (new_mode != s_active_mode) {
                                 configureI2SHardware(new_mode);
                             }
                         }
+                        continue;
+                    } else if (n > 0) {
+                        rb_write(ctrl, n);
+                        totalBytes += n;
                         continue;
                     }
                 }
