@@ -26,6 +26,41 @@ object Esp32SocketStreamer {
     @Volatile var espHost: String = "192.168.43.1"
     @Volatile var espPort: Int = 8888
 
+    enum class DacMode(val code: Byte, val label: String) {
+        PCM5102A(1.toByte(), "External PCM5102A (24-bit/96kHz)"),
+        INTERNAL_DAC(2.toByte(), "ESP32 Built-in DAC (GPIO 25/26)"),
+    }
+
+    @Volatile var dacMode: DacMode = DacMode.PCM5102A
+
+    fun setDacMode(mode: DacMode) {
+        dacMode = mode
+        sendControlPacket(mode.code)
+    }
+
+    fun sendControlPacket(modeCode: Byte = dacMode.code) {
+        scope.launch {
+            try {
+                val os = outputStream ?: return@launch
+                val packet = byteArrayOf(
+                    'H'.code.toByte(),
+                    'I'.code.toByte(),
+                    'F'.code.toByte(),
+                    'I'.code.toByte(),
+                    modeCode,
+                    0.toByte(),
+                    0.toByte(),
+                    0.toByte()
+                )
+                os.write(packet)
+                os.flush()
+                Log.i(TAG, "Sent DAC mode control packet: mode=$modeCode")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to send DAC mode packet: ${e.message}")
+            }
+        }
+    }
+
     private var socket: Socket? = null
     private var outputStream: OutputStream? = null
     private val isConnecting = AtomicBoolean(false)
@@ -56,6 +91,7 @@ object Esp32SocketStreamer {
                 socket = sock
                 outputStream = os
                 isConnected.set(true)
+                sendControlPacket(dacMode.code)
                 Log.i(TAG, "Connected to ESP32! Bit-perfect 32-bit PCM stream active.")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to connect to ESP32 ($host:$port): ${e.message}")

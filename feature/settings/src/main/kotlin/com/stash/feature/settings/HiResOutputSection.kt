@@ -47,6 +47,7 @@ fun HiResOutputRow(viewModel: HiResOutputViewModel = hiltViewModel()) {
     var confirmBitPerfect by remember { mutableStateOf(false) }
     var showEsp32Guide by remember { mutableStateOf(false) }
     var espIpInput by remember { mutableStateOf(Esp32SocketStreamer.espHost) }
+    var selectedDacMode by remember { mutableStateOf(Esp32SocketStreamer.dacMode) }
     val context = LocalContext.current
 
     val now = verdict
@@ -173,7 +174,41 @@ fun HiResOutputRow(viewModel: HiResOutputViewModel = hiltViewModel()) {
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Text(
-                        text = "3. Verify the ESP32 IP shown in your Hotspot Connected Devices list:",
+                        text = "3. Select Hardware DAC Mode:",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                selectedDacMode = Esp32SocketStreamer.DacMode.PCM5102A
+                                Esp32SocketStreamer.setDacMode(Esp32SocketStreamer.DacMode.PCM5102A)
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                text = if (selectedDacMode == Esp32SocketStreamer.DacMode.PCM5102A) "✓ PCM5102A (24/96)" else "PCM5102A (24/96)",
+                                fontWeight = if (selectedDacMode == Esp32SocketStreamer.DacMode.PCM5102A) FontWeight.Bold else FontWeight.Normal,
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                selectedDacMode = Esp32SocketStreamer.DacMode.INTERNAL_DAC
+                                Esp32SocketStreamer.setDacMode(Esp32SocketStreamer.DacMode.INTERNAL_DAC)
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                text = if (selectedDacMode == Esp32SocketStreamer.DacMode.INTERNAL_DAC) "✓ Built-in DAC" else "Built-in DAC",
+                                fontWeight = if (selectedDacMode == Esp32SocketStreamer.DacMode.INTERNAL_DAC) FontWeight.Bold else FontWeight.Normal,
+                            )
+                        }
+                    }
+                    Text(
+                        text = "4. Verify the ESP32 IP shown in your Hotspot Connected Devices list:",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     OutlinedTextField(
@@ -203,6 +238,7 @@ fun HiResOutputRow(viewModel: HiResOutputViewModel = hiltViewModel()) {
                 TextButton(onClick = {
                     val cleanIp = espIpInput.trim().ifEmpty { "192.168.43.1" }
                     Esp32SocketStreamer.espHost = cleanIp
+                    Esp32SocketStreamer.dacMode = selectedDacMode
                     Esp32SocketStreamer.close()
                     Esp32SocketStreamer.connect(cleanIp)
                     viewModel.setMode(HiResOutputMode.ESP32_WIFI_DIRECT)
