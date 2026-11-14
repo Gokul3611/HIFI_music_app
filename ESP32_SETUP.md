@@ -16,7 +16,10 @@ This document provides complete, step-by-step instructions to wire, flash, confi
 
 ## 🔌 1. Hardware Pinout & Wiring
 
-Connect the ESP32 to the PCM5102A DAC breakout board using 5 jumper wires as shown below:
+You can choose between **two hardware setup modes**:
+
+### Mode 1: External PCM5102A 32-bit DAC (Recommended for Audiophile Hi-Fi)
+Provides true **24-bit / 96 kHz studio master resolution** with 112 dB dynamic range.
 
 ```
 +--------------------+                     +--------------------+
@@ -37,8 +40,6 @@ Connect the ESP32 to the PCM5102A DAC breakout board using 5 jumper wires as sho
                                           [Analog Stereo Amplifier]
 ```
 
-### Complete Pin Mapping Table
-
 | ESP32 Pin | PCM5102A Pin | Wire Function | Details & Notes |
 | :--- | :--- | :--- | :--- |
 | **VIN / 5V** | **VCC** | Power Supply | Connect to 5V (VIN) for maximum analog headroom (2.1V RMS line level). 3.3V also works. |
@@ -47,6 +48,30 @@ Connect the ESP32 to the PCM5102A DAC breakout board using 5 jumper wires as sho
 | **GPIO 25** | **LCK / LRCK** | I2S Word Select | Switches between Left and Right audio channels. |
 | **GPIO 22** | **DIN / DATA** | I2S Audio Data | Carries 32-bit serial PCM audio samples. |
 | **GND** | **SCK** | Master Clock Ground | **CRITICAL:** SCK must be connected to GND so the PCM5102A's internal low-jitter PLL generates its own master clock. |
+
+---
+
+### Mode 2: ESP32 Built-in Internal DAC (Direct 3-Wire Connection to Amp)
+No external DAC board needed! Uses the ESP32's built-in dual-channel hardware DAC directly connected to your amplifier's AUX / RCA input.
+
+```
++--------------------+                     +---------------------------+
+|    ESP32 BOARD     |                     |  ANALOG STEREO AMPLIFIER  |
+|                    |                     |                           |
+|    GPIO 25 (DAC 1) | ------------------> | Left Channel Input (L+)   |
+|    GPIO 26 (DAC 2) | ------------------> | Right Channel Input (R+)  |
+|                GND | ------------------> | Audio Ground (GND / L-/R-)|
++--------------------+                     +---------------------------+
+```
+
+| ESP32 Pin | Amplifier Input Pin | Description |
+| :--- | :--- | :--- |
+| **GPIO 25** | **Left (L+)** | Built-in DAC Channel 1 (Left Stereo Channel) |
+| **GPIO 26** | **Right (R+)** | Built-in DAC Channel 2 (Right Stereo Channel) |
+| **GND** | **Ground (GND / L- / R-)** | Common Audio Ground |
+
+> **To activate Mode 2:** In `firmware_wifi_softap.ino`, change line 33 to:  
+> `#define AUDIO_OUTPUT_MODE MODE_INTERNAL_ESP32_DAC`
 
 ---
 
@@ -148,3 +173,4 @@ The ESP32 communicates over Wi-Fi directly with your phone. To ensure reliable, 
 
 ### Q4: Can I stream audio without mobile data?
 - **Yes!** The personal hotspot does not require active internet or mobile data. The phone and ESP32 communicate entirely over local Wi-Fi. You can play your offline downloaded FLAC/MP3 files anywhere (in a car, outdoors, or in a studio).
+
