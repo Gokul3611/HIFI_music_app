@@ -23,8 +23,11 @@ fun qbdlxProp(key: String, env: String) =
 // and the base64 X.509 SPKI public key that verifies it. Both empty → the
 // fetcher is disabled and the app has no relay (BYO / custom endpoint only).
 // The APK never contains a relay hostname; the list lives behind this URL.
-val losslessConfigUrl = qbdlxProp("lossless.configUrl", "LOSSLESS_CONFIG_URL")
-val losslessConfigPubKey = qbdlxProp("lossless.configPubKey", "LOSSLESS_CONFIG_PUBKEY")
+val defaultLosslessConfigUrl = "https://stash-tipjar.rawnaldclark.workers.dev/lossless.json"
+val defaultLosslessConfigPubKey = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAELiPYu7/k+TmVCojPEECT2w8tTnoy597StnnmS3vSiPxJ9AtluqhnIinmdknRi+h2ElUzkXYHoJjfzpoLGF46Cg"
+
+val losslessConfigUrl = qbdlxProp("lossless.configUrl", "LOSSLESS_CONFIG_URL").ifEmpty { defaultLosslessConfigUrl }
+val losslessConfigPubKey = qbdlxProp("lossless.configPubKey", "LOSSLESS_CONFIG_PUBKEY").ifEmpty { defaultLosslessConfigPubKey }
 
 android {
     namespace = "com.stash.data.download"
