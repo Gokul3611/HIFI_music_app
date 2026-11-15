@@ -190,12 +190,6 @@ class BitchordClient @Inject constructor(
         user != null || signed != null
     }.stateIn(CoroutineScope(SupervisorJob() + Dispatchers.IO), SharingStarted.Eagerly, false)
 
-    init {
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-            runCatching { matchDao.clearMisses() }
-        }
-    }
-
     /** True when a server is known (the user's own, or the signed config's); the rung is off otherwise. */
     suspend fun isConfigured(): Boolean = server() != null
 
