@@ -15,6 +15,10 @@ interface TidalMatchDao {
     @Upsert
     suspend fun upsert(entity: TidalMatchEntity)
 
+    /** Drops all cached misses so songs that failed when relay was down are re-evaluated. */
+    @Query("DELETE FROM tidal_match_cache WHERE tidal_id IS NULL OR lossless_miss_at IS NOT NULL")
+    suspend fun clearMisses(): Int
+
     /** Drops rows whose newest stamp is older than [before]; keeps the table small. */
     @Query(
         "DELETE FROM tidal_match_cache WHERE searched_at < :before " +

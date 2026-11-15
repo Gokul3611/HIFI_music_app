@@ -45,6 +45,7 @@ class BitchordClientCacheTest {
         override suspend fun get(key: String) = rows[key]
         override suspend fun upsert(entity: TidalMatchEntity) { rows[entity.key] = entity }
         override suspend fun deleteOlderThan(before: Long) = 0
+        override suspend fun clearMisses() = 0
     }
 
     private val server = MockWebServer()
