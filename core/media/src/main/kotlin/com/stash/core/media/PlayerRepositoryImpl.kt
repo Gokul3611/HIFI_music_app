@@ -74,6 +74,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -409,6 +410,9 @@ class PlayerRepositoryImpl @Inject constructor(
                         keepCurrent = true,
                     )
                     Log.i(TAG, "Autoplay remote radio fallback from '${track.title}' by ${track.artist}: $result")
+                    if (result !is RadioStartResult.Started) {
+                        autoplayTriedTrackId = null
+                    }
                 }
         }
 
@@ -974,6 +978,7 @@ class PlayerRepositoryImpl @Inject constructor(
         radioActive = false
         radioSession = null
         _radioSeedLabel.value = null
+        autoplayTriedTrackId = null
         currentSource = source
         val generation = setQueueGeneration.incrementAndGet()
 
@@ -1602,6 +1607,10 @@ class PlayerRepositoryImpl @Inject constructor(
             val seedKey = trackIdentity(songSeed.title, songSeed.artist)
             val seedTrack = firstBatch.firstOrNull { trackIdentity(it.title, it.artist) == seedKey }
             val discoveries = firstBatch.filter { it !== seedTrack }
+            if (discoveries.isEmpty()) {
+                Log.w(TAG, "startRadio keepCurrent: firstBatch contained only seed track, no discoveries found")
+                return RadioStartResult.NoStation
+            }
             currentQueueTracks = listOfNotNull(seedTrack) + discoveries
             val curIdx = controller.currentMediaItemIndex
             if (curIdx + 1 < controller.mediaItemCount) {
@@ -1638,8 +1647,17 @@ class PlayerRepositoryImpl @Inject constructor(
     override suspend fun getSimilarTracks(seed: Track, limit: Int): List<Track> {
         val pool = withContext(Dispatchers.IO) {
             try {
-                musicRepository.getAllDownloadedTracks().ifEmpty {
-                    librarySnapshot
+                val downloaded = musicRepository.getAllDownloadedTracks()
+                if (downloaded.isNotEmpty()) {
+                    downloaded
+                } else {
+                    val lib = musicRepository.getLibraryTracksIncludingOnline().firstOrNull().orEmpty()
+                    if (lib.isNotEmpty()) {
+                        lib
+                    } else {
+                        val all = musicRepository.getAllTracks().firstOrNull().orEmpty()
+                        if (all.isNotEmpty()) all else librarySnapshot
+                    }
                 }
             } catch (e: Exception) {
                 librarySnapshot
@@ -3355,6 +3373,7 @@ class PlayerRepositoryImpl @Inject constructor(
         radioActive = false
         radioSession = null
         _radioSeedLabel.value = null
+        autoplayTriedTrackId = null
         val controller = ensureController() ?: return
         dropWindow("a single song replaced the queue")
         resetPlayHistory()

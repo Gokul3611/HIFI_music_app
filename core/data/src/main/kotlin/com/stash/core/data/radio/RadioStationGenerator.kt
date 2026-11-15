@@ -35,8 +35,15 @@ class RadioStationGenerator @Inject constructor(
         // Fetch the FULL ranked neighbor list once; use the first NEIGHBOR_POOL now
         // and page the rest during widening (see widen()). Fetching the same top-N
         // again later would only re-return already-played neighbors.
-        val allNeighbors = lastFm.getSimilarArtists(seed.name, limit = NEIGHBOR_MAX)
+        var allNeighbors = lastFm.getSimilarArtists(seed.name, limit = NEIGHBOR_MAX)
             .getOrDefault(emptyList())
+        if (allNeighbors.isEmpty()) {
+            val artistId = seed.ytBrowseId ?: yt.resolveArtist(seed.name)?.id
+            if (artistId != null) {
+                val profile = runCatching { yt.getArtist(artistId) }.getOrNull()
+                allNeighbors = profile?.related.orEmpty().map { LastFmSimilarArtist(it.name, 0.5f) }
+            }
+        }
         val neighbors = allNeighbors.take(NEIGHBOR_POOL)
         // Resolve seed (via known browseId) + each neighbor's popular list, in parallel.
         val artistTracks: Map<String, List<TrackSummary>> = coroutineScope {
@@ -180,9 +187,17 @@ class RadioStationGenerator @Inject constructor(
                 is RadioSeed.Artist -> s.name
                 is RadioSeed.Song -> s.artist
             }
-            session.remainingNeighbors.addAll(
-                lastFm.getSimilarArtists(seedArtistName, limit = NEIGHBOR_MAX).getOrDefault(emptyList()),
-            )
+            val lastFmNeighbors = lastFm.getSimilarArtists(seedArtistName, limit = NEIGHBOR_MAX).getOrDefault(emptyList())
+            if (lastFmNeighbors.isNotEmpty()) {
+                session.remainingNeighbors.addAll(lastFmNeighbors)
+            } else {
+                val artistId = yt.resolveArtist(seedArtistName)?.id
+                if (artistId != null) {
+                    val profile = runCatching { yt.getArtist(artistId) }.getOrNull()
+                    val ytNeighbors = profile?.related.orEmpty().map { LastFmSimilarArtist(it.name, 0.5f) }
+                    session.remainingNeighbors.addAll(ytNeighbors)
+                }
+            }
             session.neighborsLoaded = true
         }
         if (session.remainingNeighbors.isEmpty()) { session.exhausted = true; return }
@@ -256,6 +271,53 @@ class RadioStationGenerator @Inject constructor(
         for (s in similar) {
             pool += RadioCandidate(s.artist, s.title, null, s.match.coerceAtLeast(0.05f))
         }
+
+        // YouTube Music fallback: if Last.fm gave no similar tracks (no API key, offline, or zero match)
+        if (similar.isEmpty()) {
+            val seedVideoId = seed.ytVideoId ?: yt.searchCanonicalVideoId(seed.artist, seed.title)
+            val related = seedVideoId?.let { runCatching { yt.getRelatedSongs(it) }.getOrNull() }.orEmpty()
+            if (related.isNotEmpty()) {
+                related.filterNot { it.title.equals(seed.title, ignoreCase = true) }.forEach { track ->
+                    pool += RadioCandidate(
+                        artist = track.artist,
+                        title = track.title,
+                        videoId = track.videoId,
+                        weight = 0.7f,
+                        thumbnailUrl = track.thumbnailUrl,
+                    )
+                }
+            } else {
+                val artistId = yt.resolveArtist(seed.artist)?.id
+                if (artistId != null) {
+                    val profile = runCatching { yt.getArtist(artistId) }.getOrNull()
+                    profile?.popular.orEmpty()
+                        .filterNot { it.title.equals(seed.title, ignoreCase = true) }
+                        .take(TRACKS_PER_ARTIST)
+                        .forEach { track ->
+                            pool += RadioCandidate(
+                                artist = track.artist,
+                                title = track.title,
+                                videoId = track.videoId,
+                                weight = seedWeight,
+                                thumbnailUrl = track.thumbnailUrl,
+                            )
+                        }
+                    profile?.related.orEmpty().take(5).forEach { rel ->
+                        val relPopular = runCatching { yt.getArtist(rel.id).popular.take(4) }.getOrDefault(emptyList())
+                        relPopular.forEach { track ->
+                            pool += RadioCandidate(
+                                artist = track.artist,
+                                title = track.title,
+                                videoId = track.videoId,
+                                weight = 0.5f,
+                                thumbnailUrl = track.thumbnailUrl,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         val session = RadioSession(seed, RadioInterleaver.order(pool).toMutableList(), mutableSetOf())
         return session to drainBatch(session, FIRST_BATCH)
     }
