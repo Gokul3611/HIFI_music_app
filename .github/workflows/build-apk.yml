@@ -69,7 +69,18 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/master') || startsWith(github.ref, 'refs/heads/main')
         with:
-          tag_name: latest
-          name: "Music Hi-Fi v0.9.124"
-          body: "Minimalist bit-perfect Hi-Fi Music app with ESP32 Hotspot Direct streaming."
+          tag_name: v0.9.125
+          name: "Music Hi-Fi v0.9.125"
+          body: |
+            ### 🎵 Music Hi-Fi v0.9.125 - Spotify-Like Autoplay & Bit-Perfect FLAC Streaming
+
+            #### 🌟 Highlights & New Features:
+            - **Spotify-Like Continuous Autoplay**: When playing any single song or reaching the end of an album/playlist, similar songs are automatically queued and played seamlessly without silence.
+            - **Algorithmic Music Discovery (Zero API Keys Needed)**: Native YouTube Music InnerTube "Up Next" / "Related" engine fallback ensures infinite music discovery without needing Last.fm API credentials.
+            - **Verified Online FLAC Streaming**: Cryptographically signed Tidal lossless relay (ECDSA P-256) enables bit-perfect 16/44.1, 24/48, and 24/96 online streaming.
+            - **ESP32 Wi-Fi DAC Streaming**: Stream uncompressed 24-bit / 96 kHz PCM directly to an ESP32 + PCM5102A 32-bit DAC over Wi-Fi Hotspot.
+            - **Custom In-App Updates**: Built-in updater is now anchored to `Gokul3611/HIFI_music_app` releases.
+
+            #### 📦 Download:
+            Download `Music.apk` below and install on Android 8.0+.
           files: dist/Music.apk
