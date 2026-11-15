@@ -240,6 +240,11 @@ interface PlayerRepository {
     /** Stop the active station (queued tracks remain; no more auto-grow). */
     fun stopRadio()
 
+    /**
+     * Finds locally recommended similar tracks for a seed track.
+     */
+    suspend fun getSimilarTracks(seed: Track, limit: Int = 5): List<Track>
+
     /** Live label of the active station's seed (null when no station). */
     val radioSeedLabel: StateFlow<String?>
 

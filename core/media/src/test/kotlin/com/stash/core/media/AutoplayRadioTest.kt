@@ -54,9 +54,9 @@ class AutoplayRadioTest {
     }
 
 
-    @Test fun `an All Songs file never seeds a radio`() {
-        val file = Track(id = scannedTrackId(1L), title = "Track 01", artist = "Unknown Artist")
+    @Test fun `a local track arms intelligent autoplay recommendation`() {
+        val file = Track(id = scannedTrackId(1L), title = "Track 01", artist = "Artist")
         val s = PlayerState(currentTrack = file, queue = listOf(file), currentIndex = 0, isPlaying = true)
-        assertThat(shouldAutoplayRadio(true, false, false, s, null)).isFalse()
+        assertThat(shouldAutoplayRadio(true, false, false, s, null)).isTrue()
     }
 }
