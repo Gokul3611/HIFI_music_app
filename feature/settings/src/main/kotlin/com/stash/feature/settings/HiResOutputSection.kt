@@ -176,7 +176,7 @@ fun HiResOutputRow(viewModel: HiResOutputViewModel = hiltViewModel()) {
                         OutlinedButton(
                             onClick = {
                                 selectedDacMode = Esp32SocketStreamer.DacMode.PCM5102A
-                                Esp32SocketStreamer.setDacMode(Esp32SocketStreamer.DacMode.PCM5102A)
+                                Esp32SocketStreamer.dacMode = Esp32SocketStreamer.DacMode.PCM5102A
                             },
                             modifier = Modifier.weight(1f),
                         ) {
@@ -188,7 +188,7 @@ fun HiResOutputRow(viewModel: HiResOutputViewModel = hiltViewModel()) {
                         OutlinedButton(
                             onClick = {
                                 selectedDacMode = Esp32SocketStreamer.DacMode.INTERNAL_DAC
-                                Esp32SocketStreamer.setDacMode(Esp32SocketStreamer.DacMode.INTERNAL_DAC)
+                                Esp32SocketStreamer.dacMode = Esp32SocketStreamer.DacMode.INTERNAL_DAC
                             },
                             modifier = Modifier.weight(1f),
                         ) {

@@ -37,11 +37,10 @@ object Esp32SocketStreamer {
     }
 
     @Volatile var dacMode: DacMode = DacMode.PCM5102A
-
-    fun setDacMode(mode: DacMode) {
-        dacMode = mode
-        sendControlPacket(mode.code)
-    }
+        set(value) {
+            field = value
+            sendControlPacket(value.code)
+        }
 
     fun sendControlPacket(modeCode: Byte = dacMode.code) {
         scope.launch {
