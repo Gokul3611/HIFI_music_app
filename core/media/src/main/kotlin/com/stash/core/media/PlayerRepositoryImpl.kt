@@ -1565,22 +1565,7 @@ class PlayerRepositoryImpl @Inject constructor(
         if (!streamAllowed()) return RadioStartResult.DownloadMode
         val (session, generated) = runCatching {
             radioGenerator.start(seed)
-        }.getOrNull() ?: run {
-            val localTracks = if (seed is com.stash.core.data.radio.RadioSeed.Song) {
-                val seedTrack = Track(title = seed.title, artist = seed.artist, youtubeId = seed.youtubeId)
-                getSimilarTracks(seedTrack, 10)
-            } else {
-                emptyList()
-            }
-            if (localTracks.isNotEmpty()) {
-                val syntheticSession = com.stash.core.data.radio.RadioSession(seed, mutableListOf(), mutableSetOf()).apply {
-                    exhausted = true
-                }
-                syntheticSession to localTracks
-            } else {
-                return RadioStartResult.NoStation
-            }
-        }
+        }.getOrNull() ?: return RadioStartResult.NoStation
         if (generated.isEmpty()) return RadioStartResult.NoStation
         // Library ids before queueing: the generator's ids are videoId hashes with no row, so a
         // saved radio queue resumed into nothing after the app was closed (withQueueIdentity).
