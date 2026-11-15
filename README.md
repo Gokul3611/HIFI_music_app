@@ -1,8 +1,8 @@
 # HIFI Music System & ESP32 Wireless Audio DAC
 ## Technical Reference Manual & System Documentation
 
-```
-Document Version : 2.4.0-REV2
+```text
+Document Version : 2.4.0-REV3
 Target Hardware  : ESP32-D0WDQ6 / ESP32-WROOM-32 + TI PCM5102A (I2S)
 Target Client    : Android 8.0+ (API 26–35)
 Transport Layer  : IEEE 802.11 b/g/n (TCP Socket @ Port 8888)
@@ -30,9 +30,9 @@ License          : GNU General Public License v3.0 (GPL-3.0)
 
 ## 1. System Architecture
 
-The system delivers bit-perfect, ultra-low-latency 24-bit/96 kHz audio transmission from an Android client to an external physical DAC over an ad-hoc or local Wi-Fi link, bypassing the lossy Android system mixer (`AudioFlinger`) and bandwidth-limited Bluetooth codecs (SBC/AAC).
+The system delivers bit-perfect, ultra-low-latency 24-bit / 96 kHz audio transmission from an Android client to an external physical DAC over an ad-hoc or local Wi-Fi link, bypassing the lossy Android system mixer (`AudioFlinger`) and bandwidth-limited Bluetooth codecs (SBC/AAC).
 
-```
+```text
 +---------------------------------------------------------------------------------------+
 |                                    ANDROID CLIENT                                     |
 |                                                                                       |
@@ -82,18 +82,18 @@ The receiver firmware is designed for Espressif **ESP32-WROOM-32** (or NodeMCU-3
 
 | Signal Name | ESP32 GPIO | PCM5102A Pin | Wire Color (Typical) | Electrical Specification | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **VCC** | **VIN (5V)** / **3V3** | `VCC` | Red | $3.3\,\text{V} - 5.0\,\text{V}$ DC | Logic and analog rail power supply |
-| **GND** | **GND** | `GND` | Black | $0\,\text{V}$ System Ground | Common ground plane |
-| **BCLK** | **GPIO 26** | `BCK` | Yellow | $6.144\,\text{MHz}$ Square Wave | Continuous bit clock ($96\,\text{kHz} \times 32 \times 2$) |
-| **LRCK / WS** | **GPIO 25** | `LCK` | Green | $96.0\,\text{kHz}$ Square Wave | Word select ($0 = \text{Left}, 1 = \text{Right}$) |
+| **VCC** | **VIN (5V)** / **3V3** | `VCC` | Red | 3.3V – 5.0V DC | Logic and analog rail power supply |
+| **GND** | **GND** | `GND` | Black | 0V System Ground | Common ground plane |
+| **BCLK** | **GPIO 26** | `BCK` | Yellow | 6.144 MHz Square Wave | Continuous bit clock (96 kHz × 32 × 2) |
+| **LRCK / WS** | **GPIO 25** | `LCK` | Green | 96.0 kHz Square Wave | Word select (0 = Left, 1 = Right) |
 | **DATA / DOUT** | **GPIO 22** | `DIN` | Blue | CMOS Level Digital Audio | Serial PCM audio data stream |
-| **SCK / MCLK** | **GND** | `SCK` | Black (to GND) | Pulled to $0\,\text{V}$ Logic Low | Directs PCM5102A to generate internal PLL |
+| **SCK / MCLK** | **GND** | `SCK` | Black (to GND) | Pulled to 0V Logic Low | Directs PCM5102A to generate internal PLL |
 
 ### 2.2 PCM5102A Hardware Jumper Configuration
 
 Inspect the reverse side of the PCM5102A module. The solder bridges configure the onboard hardware registers:
 
-```
+```text
   [1] FLT  -> GND (Low latency digital filter / Normal latency mode)
   [2] DEMP -> GND (De-emphasis digital filter disabled)
   [3] XSMT -> VCC (Soft un-mute active; pulled high through 10k resistor)
@@ -102,9 +102,9 @@ Inspect the reverse side of the PCM5102A module. The solder bridges configure th
 
 ### 2.3 Analog Output Stage & 3-Wire Interconnect
 
-To prevent $(L - R)$ differential cancellation or mono sum collapse at the power amplifier, the output must be terminated in a 3-wire unbalanced line-level stereo configuration:
+To prevent (L - R) differential cancellation or mono sum collapse at the power amplifier, the output must be terminated in a 3-wire unbalanced line-level stereo configuration:
 
-```
+```text
            +-----------------------------------------------+
            |    PCM5102A 3.5mm Jack / Solder Terminals     |
            +-----------------------------------------------+
@@ -126,7 +126,7 @@ To prevent $(L - R)$ differential cancellation or mono sum collapse at the power
 
 ### 3.1 Network Topology
 
-```
+```text
                   +-----------------------------------+
                   |   Android Client Hotspot / Router |
                   |   SSID : Stash-Hotspot            |
@@ -149,7 +149,7 @@ To prevent $(L - R)$ differential cancellation or mono sum collapse at the power
 
 Audio frames are encoded as uncompressed, linear little-endian 24-bit samples packed into 32-bit DMA boundaries:
 
-```
+```text
  Byte 0       Byte 1       Byte 2       Byte 3        Byte 4       Byte 5       Byte 6       Byte 7
 +------------+------------+------------+------------++------------+------------+------------+------------+
 | Left LSB   | Left Mid   | Left MSB   | Zero Pad   || Right LSB  | Right Mid  | Right MSB  | Zero Pad   |
@@ -161,14 +161,17 @@ Audio frames are encoded as uncompressed, linear little-endian 24-bit samples pa
 
 ### 3.3 Throughput & Bandwidth Computation
 
-$$\text{Sample Rate} = 96{,}000\,\text{Hz}$$
-$$\text{Bit Depth per Slot} = 32\,\text{bits}\ (4\,\text{bytes})$$
-$$\text{Channels} = 2\ (\text{Stereo})$$
-$$\text{Frame Size} = 4\,\text{bytes} \times 2 = 8\,\text{bytes}$$
-$$\text{Data Throughput} = 96{,}000 \times 8\,\text{bytes/sec} = 768{,}000\,\text{bytes/sec} \approx 6.144\,\text{Mbps raw bit clock}$$
-$$\text{Effective Network Throughput} = 768\,\text{kB/s} \times 8 \approx 3.072\,\text{Mbps}$$
+```text
+Sample Rate               : 96,000 Hz
+Bit Depth per Slot        : 32 bits (4 bytes)
+Audio Channels            : 2 (Stereo L + R)
+Frame Size                : 4 bytes × 2 channels = 8 bytes per frame
+Data Throughput Rate      : 96,000 frames/sec × 8 bytes = 768,000 bytes/sec
+Raw Bit Clock Frequency   : 768,000 × 8 bits = 6.144 Mbps
+Effective Wi-Fi Bandwidth : ~3.072 Mbps continuous payload
+```
 
-This requirement is comfortably satisfied by standard $20\,\text{MHz}$ channel-width $802.11\text{n}$ Wi-Fi links, which achieve $20\text{--}54\,\text{Mbps}$ indoor sustained throughput.
+This requirement is comfortably satisfied by standard 20 MHz channel-width 802.11n Wi-Fi links, which achieve 20 to 54 Mbps indoor sustained throughput.
 
 ---
 
@@ -176,7 +179,7 @@ This requirement is comfortably satisfied by standard $20\,\text{MHz}$ channel-w
 
 The Android client (`core/media`) implements a custom `AudioSink` and `ExoPlayer` renderer pipe:
 
-```
+```text
 [ Input Bitstream (FLAC/ALAC) ]
              |
              v
@@ -190,7 +193,7 @@ The Android client (`core/media`) implements a custom `AudioSink` and `ExoPlayer
              +---> [ Android AudioTrack ] (Muted zeroes when ESP32 output active)
 ```
 
-1. **Native Decoding:** Uses high-efficiency C++ FLAC decoders via Android Media3, preserving $24\text{-bit}/96\,\text{kHz}$ resolution without resampling.
+1. **Native Decoding:** Uses high-efficiency C++ FLAC decoders via Android Media3, preserving 24-bit / 96 kHz resolution without resampling.
 2. **Clock Decoupling:** When routing to the ESP32 socket streamer, the local `AudioTrack` receives digital silence to anchor timeline synchronization while the raw binary stream pumps asynchronously through non-blocking TCP sockets.
 3. **Buffer Management:** Employs a low-watermark flow controller to prevent underruns or buffer bloat.
 
@@ -200,7 +203,7 @@ The Android client (`core/media`) implements a custom `AudioSink` and `ExoPlayer
 
 To replicate seamless playback (as in Spotify Radio), the app includes a dual-tier recommendation engine that automatically prevents queue exhaustion.
 
-```
+```text
                                 [ Active Track Nearing End ]
                                              |
                                              v
@@ -235,8 +238,8 @@ The streaming layer connects to authenticated lossless relays:
 - **Authentication:** Elliptic Curve Digital Signature Algorithm (ECDSA) with the NIST P-256 (`secp256r1`) curve.
 - **Embedded Public Key:** Verified against the relay distribution network to establish cryptographically validated handshakes.
 - **Dynamic Stream Fallback:**
-  - `Tier 1`: Studio Master FLAC ($24\text{-bit}/96\,\text{kHz}$ or $24\text{-bit}/48\,\text{kHz}$).
-  - `Tier 2`: Redbook CD FLAC ($16\text{-bit}/44.1\,\text{kHz}$).
+  - `Tier 1`: Studio Master FLAC (24-bit / 96 kHz or 24-bit / 48 kHz).
+  - `Tier 2`: Redbook CD FLAC (16-bit / 44.1 kHz).
   - `Tier 3`: High-Bitrate AAC / OPUS fallback (low-bandwidth mode).
 
 ---
@@ -261,10 +264,10 @@ pio device monitor -b 115200
 
 ### 7.3 Flashing via Arduino IDE
 1. Open [`firmware_wifi_softap/firmware_wifi_softap.ino`](firmware_wifi_softap/firmware_wifi_softap.ino).
-2. Under **Tools $\to$ Board**, select **ESP32 Dev Module**.
+2. Under **Tools → Board**, select **ESP32 Dev Module**.
 3. Configure the following parameters:
-   - **CPU Frequency:** $240\,\text{MHz}$ (High Performance).
-   - **Flash Frequency:** $80\,\text{MHz}$.
+   - **CPU Frequency:** 240 MHz (High Performance).
+   - **Flash Frequency:** 80 MHz.
    - **Partition Scheme:** Minimal SPIFFS (1.9MB APP with OTA / Large SPIFFS).
    - **Core Debug Level:** None (or Info for debugging).
 4. Connect the ESP32 over USB and click **Upload**.
@@ -276,7 +279,7 @@ pio device monitor -b 115200
 ### 8.1 Android APK Installation
 1. Download the latest compiled package: [**Music.apk**](https://github.com/Gokul3611/HIFI_music_app/releases/download/latest/Music.apk).
 2. Transfer to device or open directly in Android Chrome.
-3. Tap `Music.apk` $\to$ **Settings** $\to$ **Allow from this source** (if sideloading).
+3. Tap `Music.apk` → **Settings** → **Allow from this source** (if sideloading).
 4. Launch the **Music** application.
 
 ### 8.2 Hardware Output Pairing
@@ -284,9 +287,9 @@ pio device monitor -b 115200
    - **SSID / Network Name:** `Stash-Hotspot`
    - **Security:** WPA2-PSK
    - **Password:** `12345678`
-   - **Band:** $2.4\,\text{GHz}$ or $5\,\text{GHz}$
+   - **Band:** 2.4 GHz or 5 GHz
 2. Power the ESP32. The onboard LED will blink while negotiating DHCP, then stay solid once connected.
-3. In **Music**, go to **Settings $\to$ Audio & Quality $\to$ Output Selection**.
+3. In **Music**, go to **Settings → Audio & Quality → Output Selection**.
 4. Select **ESP32 Hi-Fi Direct**. Audio routing shifts from the handset speakers to the analog DAC outputs immediately.
 
 ---
@@ -329,9 +332,9 @@ cd HIFI_music_app
 | :--- | :--- | :--- |
 | **No audio output from DAC** | SCK pin floating | Tie PCM5102A `SCK` pin directly to `GND` to engage internal PLL. |
 | **Distorted / Static Noise** | Bit clock / slot mismatch | Ensure firmware specifies `I2S_BITS_PER_SAMPLE_32BIT` and PCM is LE. |
-| **Audio Stutter / Dropouts** | Wi-Fi TCP buffer exhaustion | Lower phone-to-ESP32 distance; ensure Hotspot is set to $2.4\,\text{GHz}$ channel 6 or 11. |
+| **Audio Stutter / Dropouts** | Wi-Fi TCP buffer exhaustion | Lower phone-to-ESP32 distance; ensure Hotspot is set to 2.4 GHz channel 6 or 11. |
 | **Mono sound output** | Audio Ground floating | Connect all 3 wires (L+, GND, R+) from PCM5102A to the amplifier input. |
-| **Autoplay does not trigger** | Autoplay Radio toggled off | Navigate to **Settings $\to$ Playback $\to$ Autoplay Radio** and toggle ON. |
+| **Autoplay does not trigger** | Autoplay Radio toggled off | Navigate to **Settings → Playback → Autoplay Radio** and toggle ON. |
 | **In-app update failure** | Network sandbox or repository mismatch | Ensure client tracks `Gokul3611/HIFI_music_app` repository release assets. |
 
 ### 10.2 Serial Log Monitoring (`logcat`)
@@ -348,7 +351,7 @@ adb logcat -s StashPlayback PlayerRepositoryImpl Esp32SocketStreamer
 
 ## 📜 License
 
-```
+```text
 Copyright (C) 2026 Gokul E. & Contributors
 Base architecture upstream (C) Rawnald Clark.
 
