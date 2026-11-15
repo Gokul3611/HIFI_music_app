@@ -202,11 +202,11 @@ class StashAudioOutput(
             // while Media3 position, lyrics, and progress bar advance normally.
             val remaining = buffer.remaining()
             val silent = getSilentBuffer(remaining)
-            val handled = inner.write(silent, encodedAccessUnitCount, presentationTimeUs)
+            inner.write(silent, encodedAccessUnitCount, presentationTimeUs)
             buffer.position(buffer.limit())
             framesWritten += remaining / inFrameSize
             publishTuning()
-            return handled
+            return true
         }
 
         val handled = if (!writer.hasPending && !dspOn && !softVolume && inFormat == outFormat) {

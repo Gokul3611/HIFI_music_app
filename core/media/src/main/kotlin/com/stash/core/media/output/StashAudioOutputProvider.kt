@@ -33,6 +33,8 @@ class StashAudioOutputProvider(
         val inFormat = when (config.encoding) {
             C.ENCODING_PCM_FLOAT -> SampleFormat.FLOAT
             C.ENCODING_PCM_16BIT -> SampleFormat.INT16
+            C.ENCODING_PCM_24BIT -> SampleFormat.INT24
+            C.ENCODING_PCM_32BIT -> SampleFormat.INT32
             else -> null
         }
         val channels = Integer.bitCount(config.channelMask)

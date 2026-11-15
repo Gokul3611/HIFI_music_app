@@ -233,6 +233,31 @@ object Esp32SocketStreamer {
     private val isConnecting = AtomicBoolean(false)
     val isConnected = AtomicBoolean(false)
 
+    // Decoupled asynchronous transmission queue to guarantee zero blocking on ExoPlayer audio thread
+    private val sendQueue = java.util.concurrent.LinkedBlockingQueue<ByteArray>(48)
+    @Volatile private var senderThread: Thread? = null
+
+    private fun startSenderThread(os: OutputStream) {
+        senderThread?.interrupt()
+        senderThread = Thread({
+            try {
+                while (isConnected.get() && !Thread.currentThread().isInterrupted) {
+                    val chunk = sendQueue.poll(500, java.util.concurrent.TimeUnit.MILLISECONDS) ?: continue
+                    os.write(chunk)
+                }
+            } catch (e: Exception) {
+                if (isConnected.get()) {
+                    Log.w(TAG, "Sender thread error: ${e.message}")
+                    close()
+                }
+            }
+        }, "Esp32TcpSender").apply {
+            isDaemon = true
+            priority = Thread.MAX_PRIORITY
+            start()
+        }
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Reusable conversion buffer on the audio thread (zero GC churn)
@@ -271,6 +296,7 @@ object Esp32SocketStreamer {
                 isConnected.set(true)
                 espHost = host
                 espPort = port
+                startSenderThread(os)
 
                 // Try to read initial greeting from ESP32
                 var verifiedMode = dacMode
@@ -502,7 +528,13 @@ object Esp32SocketStreamer {
                 }
             }
 
-            os.write(outBytes, 0, byteCount)
+            // Non-blocking hand-off to dedicated network thread (Zero ExoPlayer thread stalling)
+            val chunk = ByteArray(byteCount)
+            System.arraycopy(outBytes, 0, chunk, 0, byteCount)
+            if (!sendQueue.offer(chunk)) {
+                sendQueue.poll() // drop oldest chunk to stay locked to real-time low latency
+                sendQueue.offer(chunk)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Socket write error: ${e.message}. Reconnecting...")
             close()
@@ -518,6 +550,9 @@ object Esp32SocketStreamer {
     fun close() {
         isConnected.set(false)
         isConnecting.set(false)
+        senderThread?.interrupt()
+        senderThread = null
+        sendQueue.clear()
         try {
             outputStream?.close()
         } catch (e: Exception) {}
