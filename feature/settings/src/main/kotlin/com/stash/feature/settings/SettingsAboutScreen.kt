@@ -22,7 +22,7 @@ import com.stash.feature.settings.components.SettingsNavRow
 import com.stash.feature.settings.components.SettingsGroupCard
 
 /** Stash's source, where the GitHub star is. */
-internal const val STASH_GITHUB_URL = "https://github.com/rawnaldclark/Stash"
+internal const val STASH_GITHUB_URL = "https://github.com/Gokul3611/HIFI_music_app"
 
 /**
  * The About & Help spoke of the hub-and-spoke Settings redesign.
