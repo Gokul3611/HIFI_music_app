@@ -45,6 +45,20 @@ object Esp32SocketStreamer {
 
     fun sendControlPacket(modeCode: Byte = dacMode.code) {
         scope.launch {
+            // 1. Send Out-of-Band UDP Mode Control to Port 8889 (Zero TCP Audio Stream Pollution)
+            try {
+                val udpSocket = DatagramSocket()
+                val message = "MODE:$modeCode".toByteArray()
+                val targetAddr = InetAddress.getByName(espHost)
+                val packet = DatagramPacket(message, message.size, targetAddr, 8889)
+                udpSocket.send(packet)
+                udpSocket.close()
+                Log.i(TAG, "Sent out-of-band UDP DAC mode: mode=$modeCode to $espHost:8889")
+            } catch (e: Exception) {
+                Log.w(TAG, "UDP mode packet note: ${e.message}")
+            }
+
+            // 2. Fallback: also send on TCP socket if connected (Backward compatibility)
             try {
                 val os = outputStream ?: return@launch
                 val packet = byteArrayOf(
@@ -59,10 +73,7 @@ object Esp32SocketStreamer {
                 )
                 os.write(packet)
                 os.flush()
-                Log.i(TAG, "Sent DAC mode control packet: mode=$modeCode")
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to send DAC mode packet: ${e.message}")
-            }
+            } catch (_: Exception) {}
         }
     }
 
@@ -161,14 +172,16 @@ object Esp32SocketStreamer {
 
                 val response = String(responsePacket.data, 0, responsePacket.length)
                 if (response.contains("HIFI_DAC_HERE")) {
-                    val ip = responsePacket.address.hostAddress
-                    Log.i(TAG, "Auto-discovered ESP32 Hi-Fi Receiver at IP: $ip")
-                    foundIp = ip
-                    espHost = ip
-                    withContext(Dispatchers.Main) {
-                        onDiscovered?.invoke(ip)
+                    val ip = responsePacket.address?.hostAddress
+                    if (ip != null) {
+                        Log.i(TAG, "Auto-discovered ESP32 Hi-Fi Receiver at IP: $ip")
+                        foundIp = ip
+                        espHost = ip
+                        withContext(Dispatchers.Main) {
+                            onDiscovered?.invoke(ip)
+                        }
+                        connect(ip)
                     }
-                    connect(ip)
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "UDP Auto-Discovery timed out or failed: ${e.message}")
@@ -182,13 +195,15 @@ object Esp32SocketStreamer {
                     try {
                         val mdnsAddr = InetAddress.getByName("music-dac.local")
                         val ip = mdnsAddr.hostAddress
-                        Log.i(TAG, "Resolved mDNS music-dac.local at: $ip")
-                        foundIp = ip
-                        espHost = ip
-                        withContext(Dispatchers.Main) {
-                            onDiscovered?.invoke(ip)
+                        if (ip != null) {
+                            Log.i(TAG, "Resolved mDNS music-dac.local at: $ip")
+                            foundIp = ip
+                            espHost = ip
+                            withContext(Dispatchers.Main) {
+                                onDiscovered?.invoke(ip)
+                            }
+                            connect(ip)
                         }
-                        connect(ip)
                     } catch (_: Exception) {
                         withContext(Dispatchers.Main) {
                             onFailed?.invoke()
