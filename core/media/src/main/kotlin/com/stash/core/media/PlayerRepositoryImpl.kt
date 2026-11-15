@@ -1561,8 +1561,10 @@ class PlayerRepositoryImpl @Inject constructor(
         keepCurrent: Boolean,
     ): RadioStartResult {
         val controller = ensureController() ?: return RadioStartResult.PlayerNotReady
+        // A station is songs found online: Download mode plays only what is on the phone.
+        if (!streamAllowed()) return RadioStartResult.DownloadMode
         val (session, generated) = runCatching {
-            if (streamAllowed()) radioGenerator.start(seed) else null
+            radioGenerator.start(seed)
         }.getOrNull() ?: run {
             val localTracks = if (seed is com.stash.core.data.radio.RadioSeed.Song) {
                 val seedTrack = Track(title = seed.title, artist = seed.artist, youtubeId = seed.youtubeId)
