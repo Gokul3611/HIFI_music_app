@@ -73,7 +73,7 @@ object Esp32SocketStreamer {
                 )
                 os.write(packet)
                 os.flush()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {}
         }
     }
 
@@ -140,7 +140,7 @@ object Esp32SocketStreamer {
                 val broadcastTargets = mutableSetOf<InetAddress>()
                 try {
                     broadcastTargets.add(InetAddress.getByName("255.255.255.255"))
-                } catch (_: Exception) {}
+                } catch (e: Exception) {}
 
                 try {
                     val interfaces = NetworkInterface.getNetworkInterfaces()
@@ -162,7 +162,7 @@ object Esp32SocketStreamer {
                     try {
                         val packet = DatagramPacket(message, message.size, target, 8889)
                         datagramSocket.send(packet)
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {}
                 }
                 Log.i(TAG, "Sent UDP discovery broadcasts to ${broadcastTargets.size} targets on port 8889")
 
@@ -188,7 +188,7 @@ object Esp32SocketStreamer {
             } finally {
                 try {
                     datagramSocket?.close()
-                } catch (_: Exception) {}
+                } catch (e: Exception) {}
 
                 if (foundIp == null) {
                     // Try fallback to mDNS if available
@@ -204,7 +204,7 @@ object Esp32SocketStreamer {
                             }
                             connect(ip)
                         }
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
                             onFailed?.invoke()
                         }
@@ -299,10 +299,10 @@ object Esp32SocketStreamer {
         isConnected.set(false)
         try {
             outputStream?.close()
-        } catch (_: Exception) {}
+        } catch (e: Exception) {}
         try {
             socket?.close()
-        } catch (_: Exception) {}
+        } catch (e: Exception) {}
         outputStream = null
         socket = null
     }
