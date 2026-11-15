@@ -125,6 +125,8 @@ class PlayerRepositoryImpl @Inject constructor(
     // Remote v2 (spec 2026-11-03 §2.3): while a linked browser plays the queue, this phone resolves nothing it won't play.
     // Null in hand-built tests (never a browser).
     private val browserOutputs: com.stash.core.media.cast.BrowserOutputs? = null,
+    private val localRecommendationEngine: com.stash.core.media.recommendation.LocalRecommendationEngine =
+        com.stash.core.media.recommendation.LocalRecommendationEngine(),
 ) : PlayerRepository {
 
     /**
@@ -377,10 +379,9 @@ class PlayerRepositoryImpl @Inject constructor(
             }
         }
 
-        // Autoplay radio (user ask, 2026-09-07): with the setting on, the moment
-        // the LAST queued track starts, a song radio seeded from it is spliced
-        // behind it, so a one-off play never ends in silence. Tried once per
-        // track: a station that cannot be built is not retried on every tick.
+        // Autoplay intelligent recommendation: with the setting on, the moment
+        // the LAST queued track starts, highly-relevant similar tracks are spliced
+        // behind it, so a one-off play never ends in silence.
         scope.launch {
             kotlinx.coroutines.flow.combine(playerState, autoplayRadioPreference.enabled) { state, on -> state to on }
                 .collect { (state, on) ->
@@ -388,11 +389,26 @@ class PlayerRepositoryImpl @Inject constructor(
                     if (!shouldAutoplayRadio(on, radioActive, libraryShuffleActive, state, autoplayTriedTrackId)) return@collect
                     val track = state.currentTrack ?: return@collect
                     autoplayTriedTrackId = track.id
+
+                    // 1. Local intelligent similarity (zero network, fast, works offline)
+                    val similarTracks = getSimilarTracks(track, limit = 5)
+                    if (similarTracks.isNotEmpty()) {
+                        val controller = controllerDeferred?.takeIf { it.mediaItemCount > 0 }
+                        if (controller != null) {
+                            val queued = similarTracks.map { it.withQueueIdentity() }
+                            currentQueueTracks = currentQueueTracks + queued
+                            controller.addMediaItems(queued.map { it.toQueueMediaItem() })
+                            Log.i(TAG, "Autoplay: appended ${queued.size} locally recommended similar tracks for '${track.title}'")
+                            return@collect
+                        }
+                    }
+
+                    // 2. Remote radio fallback if local recommendations were exhausted
                     val result = startRadio(
                         com.stash.core.data.radio.RadioSeed.Song(track.title, track.artist, track.youtubeId),
                         keepCurrent = true,
                     )
-                    Log.i(TAG, "autoplay radio from '${track.title}' by ${track.artist}: $result")
+                    Log.i(TAG, "Autoplay remote radio fallback from '${track.title}' by ${track.artist}: $result")
                 }
         }
 
@@ -1547,7 +1563,24 @@ class PlayerRepositoryImpl @Inject constructor(
         val controller = ensureController() ?: return RadioStartResult.PlayerNotReady
         // A station is songs found online: Download mode plays only what is on the phone.
         if (!streamAllowed()) return RadioStartResult.DownloadMode
-        val (session, generated) = radioGenerator.start(seed)
+        val (session, generated) = runCatching {
+            radioGenerator.start(seed)
+        }.getOrNull() ?: run {
+            val localTracks = if (seed is com.stash.core.data.radio.RadioSeed.Song) {
+                val seedTrack = Track(title = seed.title, artist = seed.artist, youtubeId = seed.youtubeId)
+                getSimilarTracks(seedTrack, 10)
+            } else {
+                emptyList()
+            }
+            if (localTracks.isNotEmpty()) {
+                val syntheticSession = com.stash.core.data.radio.RadioSession(seed, mutableListOf(), mutableSetOf()).apply {
+                    exhausted = true
+                }
+                syntheticSession to localTracks
+            } else {
+                return RadioStartResult.NoStation
+            }
+        }
         if (generated.isEmpty()) return RadioStartResult.NoStation
         // Library ids before queueing: the generator's ids are videoId hashes with no row, so a
         // saved radio queue resumed into nothing after the app was closed (withQueueIdentity).
@@ -1615,6 +1648,20 @@ class PlayerRepositoryImpl @Inject constructor(
         radioSession = null
         _radioSeedLabel.value = null
         currentSource = com.stash.core.model.PlaybackSource.Unknown
+    }
+
+    override suspend fun getSimilarTracks(seed: Track, limit: Int): List<Track> {
+        val pool = withContext(Dispatchers.IO) {
+            try {
+                musicRepository.getAllDownloadedTracks().ifEmpty {
+                    librarySnapshot
+                }
+            } catch (e: Exception) {
+                librarySnapshot
+            }
+        }
+        val queuedIds = currentQueueTracks.map { it.id }.toSet()
+        return localRecommendationEngine.findSimilarTracks(seed, pool, queuedIds, limit)
     }
 
     /** Append the next generated batch to the station queue. Single-flight via

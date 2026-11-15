@@ -17,9 +17,9 @@ interface AutoplayRadioPreference {
     suspend fun setEnabled(value: Boolean)
 
     companion object {
-        /** Always off; the player's default so tests and previews need no store. */
+        /** Always on; the player's default so playback smoothly autoplays similar tracks like Spotify. */
         val Off: AutoplayRadioPreference = object : AutoplayRadioPreference {
-            override val enabled: Flow<Boolean> = flowOf(false)
+            override val enabled: Flow<Boolean> = flowOf(true)
             override suspend fun setEnabled(value: Boolean) = Unit
         }
     }
