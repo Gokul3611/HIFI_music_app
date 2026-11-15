@@ -5,8 +5,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.OutputStream
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.NetworkInterface
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -98,6 +103,98 @@ object Esp32SocketStreamer {
                 close()
             } finally {
                 isConnecting.set(false)
+            }
+        }
+    }
+
+    /**
+     * Broadcasts UDP discovery packet on port 8889 to find the ESP32 IP on the network.
+     * When ESP32 responds with "HIFI_DAC_HERE", updates espHost and triggers connection.
+     */
+    fun discoverAndConnect(
+        onDiscovered: ((String) -> Unit)? = null,
+        onFailed: (() -> Unit)? = null,
+    ) {
+        scope.launch {
+            var foundIp: String? = null
+            var datagramSocket: DatagramSocket? = null
+            try {
+                datagramSocket = DatagramSocket()
+                datagramSocket.broadcast = true
+                datagramSocket.soTimeout = 2500 // 2.5 seconds discovery window
+
+                val message = "HIFI_DISCOVER".toByteArray()
+
+                // Collect broadcast addresses across all network interfaces
+                val broadcastTargets = mutableSetOf<InetAddress>()
+                try {
+                    broadcastTargets.add(InetAddress.getByName("255.255.255.255"))
+                } catch (_: Exception) {}
+
+                try {
+                    val interfaces = NetworkInterface.getNetworkInterfaces()
+                    while (interfaces.hasMoreElements()) {
+                        val netIf = interfaces.nextElement()
+                        if (netIf.isLoopback || !netIf.isUp) continue
+                        for (addr in netIf.interfaceAddresses) {
+                            val bcast = addr.broadcast
+                            if (bcast != null) {
+                                broadcastTargets.add(bcast)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Interface enumeration note: ${e.message}")
+                }
+
+                for (target in broadcastTargets) {
+                    try {
+                        val packet = DatagramPacket(message, message.size, target, 8889)
+                        datagramSocket.send(packet)
+                    } catch (_: Exception) {}
+                }
+                Log.i(TAG, "Sent UDP discovery broadcasts to ${broadcastTargets.size} targets on port 8889")
+
+                val buffer = ByteArray(128)
+                val responsePacket = DatagramPacket(buffer, buffer.size)
+                datagramSocket.receive(responsePacket)
+
+                val response = String(responsePacket.data, 0, responsePacket.length)
+                if (response.contains("HIFI_DAC_HERE")) {
+                    val ip = responsePacket.address.hostAddress
+                    Log.i(TAG, "Auto-discovered ESP32 Hi-Fi Receiver at IP: $ip")
+                    foundIp = ip
+                    espHost = ip
+                    withContext(Dispatchers.Main) {
+                        onDiscovered?.invoke(ip)
+                    }
+                    connect(ip)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "UDP Auto-Discovery timed out or failed: ${e.message}")
+            } finally {
+                try {
+                    datagramSocket?.close()
+                } catch (_: Exception) {}
+
+                if (foundIp == null) {
+                    // Try fallback to mDNS if available
+                    try {
+                        val mdnsAddr = InetAddress.getByName("music-dac.local")
+                        val ip = mdnsAddr.hostAddress
+                        Log.i(TAG, "Resolved mDNS music-dac.local at: $ip")
+                        foundIp = ip
+                        espHost = ip
+                        withContext(Dispatchers.Main) {
+                            onDiscovered?.invoke(ip)
+                        }
+                        connect(ip)
+                    } catch (_: Exception) {
+                        withContext(Dispatchers.Main) {
+                            onFailed?.invoke()
+                        }
+                    }
+                }
             }
         }
     }

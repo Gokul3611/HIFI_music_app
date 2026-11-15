@@ -48,6 +48,8 @@ fun HiResOutputRow(viewModel: HiResOutputViewModel = hiltViewModel()) {
     var showEsp32Guide by remember { mutableStateOf(false) }
     var espIpInput by remember { mutableStateOf(Esp32SocketStreamer.espHost) }
     var selectedDacMode by remember { mutableStateOf(Esp32SocketStreamer.dacMode) }
+    var isDiscovering by remember { mutableStateOf(false) }
+    var discoveryStatus by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
     val now = verdict
@@ -155,26 +157,15 @@ fun HiResOutputRow(viewModel: HiResOutputViewModel = hiltViewModel()) {
     if (showEsp32Guide) {
         AlertDialog(
             onDismissRequest = { showEsp32Guide = false },
-            title = { Text("ESP32 Hi-Fi Hotspot Guide", fontWeight = FontWeight.Bold) },
+            title = { Text("ESP32 Hi-Fi Direct Stream", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "Follow these steps to stream uncompressed 24-bit / 96 kHz audio:",
+                        text = "Zero tethering: ESP32 joins your existing Wi-Fi / Hotspot automatically without disturbing other devices.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
-                        text = "1. Turn on your Phone's Personal Hotspot:\n" +
-                            "   • Hotspot Name: Stash-Hotspot\n" +
-                            "   • Password: 12345678",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = "2. Power on your ESP32 + PCM5102A DAC. It will connect automatically.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Text(
-                        text = "3. Select Hardware DAC Mode:",
+                        text = "1. Select Hardware DAC Mode:",
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Bold,
                     )
@@ -207,8 +198,44 @@ fun HiResOutputRow(viewModel: HiResOutputViewModel = hiltViewModel()) {
                             )
                         }
                     }
+
                     Text(
-                        text = "4. Verify the ESP32 IP shown in your Hotspot Connected Devices list:",
+                        text = "2. Auto-Discovery (UDP broadcast port 8889):",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            isDiscovering = true
+                            discoveryStatus = "Scanning network for ESP32 Hi-Fi..."
+                            Esp32SocketStreamer.discoverAndConnect(
+                                onDiscovered = { ip ->
+                                    isDiscovering = false
+                                    espIpInput = ip
+                                    discoveryStatus = "Found ESP32 at $ip!"
+                                },
+                                onFailed = {
+                                    isDiscovering = false
+                                    discoveryStatus = "Not discovered automatically. Verify IP below."
+                                },
+                            )
+                        },
+                        enabled = !isDiscovering,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(if (isDiscovering) "Scanning network..." else "🔍 Auto-Discover ESP32")
+                    }
+
+                    if (discoveryStatus != null) {
+                        Text(
+                            text = discoveryStatus ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+
+                    Text(
+                        text = "3. Or manually enter the ESP32 IP:",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     OutlinedTextField(
@@ -218,20 +245,6 @@ fun HiResOutputRow(viewModel: HiResOutputViewModel = hiltViewModel()) {
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        OutlinedButton(
-                            onClick = {
-                                val intent = Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                }
-                                context.startActivity(intent)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("Open Hotspot Settings")
-                        }
-                    }
                 }
             },
             confirmButton = {
