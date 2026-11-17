@@ -349,6 +349,21 @@ adb logcat -s StashPlayback PlayerRepositoryImpl Esp32SocketStreamer
 
 ---
 
+## 🙏 Credits & Acknowledgements
+
+This application is built upon the phenomenal foundation of **Stash**, conceived, designed, and architected by **Rawnald Clark** ([@rawnaldclark](https://github.com/rawnaldclark) · `rawnaldclark@gmail.com`).
+
+Over **2,600+ commits** of tireless open-source craftsmanship by Rawnald Clark made this platform possible:
+- **Core Architecture:** The reactive multi-module Android Clean Architecture (`:core`, `:data`, `:feature`), Room FTS offline database, and WorkManager sync engine.
+- **Playback & Media3 Engine:** The robust ExoPlayer streaming service, background audio focus handling, lockscreen controllers, and signal path diagnostics.
+- **Lossless & Streaming Pipelines:** Cryptographic Tidal/Qobuz relay integration, multi-tier audio resolvers, and adaptive format negotiation.
+- **Metadata & Tagging:** In-process FFmpeg Vorbis/Opus comment embedder, cover art processing, and library file organization.
+- **InnerTube & Multi-Platform Sync:** Innovative client token scraping, Liked Songs synchronization, and cross-platform music imports.
+
+Massive credit and deepest gratitude to **Rawnald Clark** for creating and sharing the foundational Stash music player with the world.
+
+---
+
 ## 📜 License
 
 ```text
