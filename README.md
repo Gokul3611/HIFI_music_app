@@ -351,7 +351,7 @@ adb logcat -s StashPlayback PlayerRepositoryImpl Esp32SocketStreamer
 
 ## 🙏 Credits & Acknowledgements
 
-This application is built upon the phenomenal foundation of **Stash**, conceived, designed, and architected by **Rawnald Clark** ([@rawnaldclark](https://github.com/rawnaldclark) · `rawnaldclark@gmail.com`).
+This application is built upon the phenomenal foundation of **Stash**, conceived, designed, and architected by **Rawnald Clark** ([@rawnaldclark](https://github.com/rawnaldclark)).
 
 Over **2,600+ commits** of tireless open-source craftsmanship by Rawnald Clark made this platform possible:
 - **Core Architecture:** The reactive multi-module Android Clean Architecture (`:core`, `:data`, `:feature`), Room FTS offline database, and WorkManager sync engine.
