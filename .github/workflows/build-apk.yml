@@ -58,25 +58,28 @@ jobs:
 
       - name: Compile ESP32 firmware
         run: |
-          mkdir -p dist/firmware
-          arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir dist/firmware firmware_wifi_softap
-          ESP32_CORE="$(arduino-cli config get directories.data)/packages/esp32/hardware/esp32/2.0.17"
-          APP_BIN="$(find dist/firmware -maxdepth 1 -type f -name '*.bin' ! -name '*.bootloader.bin' ! -name '*.partitions.bin' -print -quit)"
-          BOOTLOADER_BIN="$(find dist/firmware -maxdepth 1 -type f -name '*.bootloader.bin' -print -quit)"
-          PARTITIONS_BIN="$(find dist/firmware -maxdepth 1 -type f -name '*.partitions.bin' -print -quit)"
-          ESPTOOL="$ESP32_CORE/tools/esptool/esptool.py"
-          if [[ -z "$APP_BIN" || -z "$BOOTLOADER_BIN" || -z "$PARTITIONS_BIN" || ! -f "$ESPTOOL" ]]; then
-            echo "Arduino ESP32 compiler did not produce the expected flash images." >&2
-            exit 1
-          fi
-          python3 "$ESPTOOL" --chip esp32 merge_bin \
-            -o dist/firmware/ESP32-WiFi-SoftAP-full-flash.bin \
-            --flash_mode keep --flash_freq keep --flash_size keep \
-            0x1000 "$BOOTLOADER_BIN" \
-            0x8000 "$PARTITIONS_BIN" \
-            0xe000 "$ESP32_CORE/tools/partitions/boot_app0.bin" \
-            0x10000 "$APP_BIN"
-          ls -lh dist/firmware/*.bin
+          set -o pipefail
+          {
+            mkdir -p dist/firmware
+            arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir dist/firmware firmware_wifi_softap
+            ESP32_CORE="$(arduino-cli config get directories.data)/packages/esp32/hardware/esp32/2.0.17"
+            APP_BIN="$(find dist/firmware -maxdepth 1 -type f -name '*.bin' ! -name '*.bootloader.bin' ! -name '*.partitions.bin' -print -quit)"
+            BOOTLOADER_BIN="$(find dist/firmware -maxdepth 1 -type f -name '*.bootloader.bin' -print -quit)"
+            PARTITIONS_BIN="$(find dist/firmware -maxdepth 1 -type f -name '*.partitions.bin' -print -quit)"
+            ESPTOOL="$ESP32_CORE/tools/esptool/esptool.py"
+            if [[ -z "$APP_BIN" || -z "$BOOTLOADER_BIN" || -z "$PARTITIONS_BIN" || ! -f "$ESPTOOL" ]]; then
+              echo "Arduino ESP32 compiler did not produce the expected flash images." >&2
+              exit 1
+            fi
+            python3 "$ESPTOOL" --chip esp32 merge_bin \
+              -o dist/firmware/ESP32-WiFi-SoftAP-full-flash.bin \
+              --flash_mode keep --flash_freq keep --flash_size keep \
+              0x1000 "$BOOTLOADER_BIN" \
+              0x8000 "$PARTITIONS_BIN" \
+              0xe000 "$ESP32_CORE/tools/partitions/boot_app0.bin" \
+              0x10000 "$APP_BIN"
+            ls -lh dist/firmware/*.bin
+          } 2>&1 | tee firmware-build.log
 
       - name: Run unit tests and build Debug APK
         env:
@@ -86,24 +89,28 @@ jobs:
           set -o pipefail
           ./gradlew testDebugUnitTest assembleDebug --no-daemon --no-parallel --max-workers=2 --stacktrace 2>&1 | tee android-build.log
 
-      - name: Surface Android build failure details
+      - name: Surface build failure details
         if: failure()
         shell: bash
         run: |
-          if [ -f android-build.log ]; then
-            details="$(tail -n 45 android-build.log)"
-            details="${details//'%'/'%25'}"
-            details="${details//$'\r'/'%0D'}"
-            details="${details//$'\n'/'%0A'}"
-            echo "::error title=Android build failure details::${details}"
-          fi
+          for log_file in firmware-build.log android-build.log; do
+            if [ -f "$log_file" ]; then
+              details="$(tail -n 45 "$log_file")"
+              details="${details//'%'/'%25'}"
+              details="${details//$'\r'/'%0D'}"
+              details="${details//$'\n'/'%0A'}"
+              echo "::error title=${log_file} tail::${details}"
+            fi
+          done
 
-      - name: Upload Android build log
+      - name: Upload build logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: Android-build-log
-          path: android-build.log
+          name: Build-logs
+          path: |
+            firmware-build.log
+            android-build.log
           if-no-files-found: ignore
           retention-days: 7
 
