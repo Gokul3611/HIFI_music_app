@@ -180,6 +180,14 @@ class LosslessConfigFetcherTest {
         assertThat(server.requestCount).isEqualTo(0)
     }
 
+    @Test fun `no cached config means no relay before the first signed refresh`() = runTest {
+        val f = fetcher()
+        assertThat(f.enabled).isTrue()
+        f.loadCached()
+        assertThat(f.tidalRelay.value).isNull()
+        assertThat(f.relayKey.value).isNull()
+    }
+
     @Test fun `an oversized config body is rejected without applying`() = runTest {
         server.enqueue(MockResponse().setBody("x".repeat(70_000)))
         val f = fetcher()
