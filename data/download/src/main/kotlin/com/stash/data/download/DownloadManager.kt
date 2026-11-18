@@ -981,7 +981,7 @@ class DownloadManager @Inject constructor(
                     "for '${track.artist} - ${track.title}' — rejecting + failing over",
             )
             // A stub far shorter than the song is a file that wasn't what it was said to be.
-            losslessHealthGate.recordWrongFile(match.sourceId)
+            losslessHealthGate.recordDegraded(match.sourceId)
             runCatching { fetched.delete() }
             return@repeat
         }
