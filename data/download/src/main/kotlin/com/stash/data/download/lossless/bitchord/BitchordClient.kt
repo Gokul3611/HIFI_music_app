@@ -244,8 +244,11 @@ class BitchordClient @Inject constructor(
      * The stream for [query], or null on anything else (miss, busy, error, off). Kept for
      * the streaming rung, which only needs "play this or move on"; see [lookup].
      */
-    suspend fun resolve(query: TrackQuery, allowAac: Boolean = false): BitchordStream? =
-        (lookup(query, allowAac) as? TidalLookup.Found)?.stream
+    suspend fun resolve(query: TrackQuery, allowAac: Boolean = false): BitchordStream? {
+        val result = lookup(query, allowAac)
+        if (result is TidalLookup.Busy) com.stash.data.download.lossless.noteLosslessBusy(result.untilMs)
+        return (result as? TidalLookup.Found)?.stream
+    }
 
     /**
      * Find [query] on Tidal through the relay, spending as little relay quota as possible:

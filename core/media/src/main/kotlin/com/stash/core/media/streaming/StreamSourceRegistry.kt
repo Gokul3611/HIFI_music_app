@@ -5,6 +5,7 @@ import com.stash.core.data.db.entity.TrackEntity
 import com.stash.core.data.prefs.StreamingPreference
 import com.stash.core.media.diagnostics.PlaybackDiagnosticsLog
 import com.stash.data.download.lossless.LosslessAvailability
+import com.stash.data.download.lossless.LosslessBusyNote
 import com.stash.data.download.lossless.LosslessSourcePreferences
 import com.stash.data.download.lossless.quota.LosslessQuota
 import kotlinx.coroutines.CoroutineDispatcher
@@ -17,6 +18,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -283,6 +285,7 @@ class StreamSourceRegistry internal constructor(
         speculative: Boolean,
     ): StreamUrl? {
         val startedNs = System.nanoTime()
+        val busyNote = LosslessBusyNote()
         // The Lossless switch (Settings › Audio & Quality) governs streaming as well as
         // downloads (2026-09-05): off means no FLAC anywhere, so the lossless sources
         // leave the chain and the track streams from the lossy rungs. It outranks the
@@ -452,7 +455,7 @@ class StreamSourceRegistry internal constructor(
         // exit below. Still null when the walk ends means every rung missed.
         var servedBy: String? = null
         return try {
-            coroutineScope {
+            withContext(busyNote) { coroutineScope {
                 val jioLane = if (hedged && resolvers.any { it.first == "jiosaavn" }) {
                     async { quietly("jiosaavn", track) { jiosaavn.resolve(track) } }
                 } else {
@@ -522,6 +525,10 @@ class StreamSourceRegistry internal constructor(
                 }
             }.also {
                 diagnosticsLog.recordResolve(track.id, servedBy ?: "none (all missed)", msSince(startedNs), lossless)
+            } }.let { result ->
+                if (result != null && busyNote.heard && !result.isLosslessLink()) {
+                    result.copy(losslessBusyUntilMs = busyNote.untilMs, forThisPlayOnly = true)
+                } else result
             }
         } catch (e: TimeoutCancellationException) {
             // resolve()'s deadline fired mid-walk. A hang is an outcome, and the player only sees
