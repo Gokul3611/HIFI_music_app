@@ -121,6 +121,7 @@ dependencies {
     // EqStoreTest setup in :core:media.
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.work.testing)
 
     // Instrumented tests — MetadataEmbeddingIntegrationTest runs against the
     // ffmpeg .so bundled by youtubedl-android on a real device, since that
