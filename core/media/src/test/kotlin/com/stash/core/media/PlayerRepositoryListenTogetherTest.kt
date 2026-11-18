@@ -135,7 +135,9 @@ class PlayerRepositoryListenTogetherTest {
         sessionPlayer()
         repo.updateState(controller)
         shadowOf(Looper.getMainLooper()).idle()
-        coVerify(exactly = 1) { radioGenerator.start(any()) }
+        // Local recommendations run on Dispatchers.IO before the radio fallback.
+        // Draining Robolectric's main looper alone doesn't wait for that IO work.
+        coVerify(timeout = 5_000, exactly = 1) { radioGenerator.start(any()) }
     }
 
     @Test fun `during a session next-track prefetch does nothing`() = runTest {
