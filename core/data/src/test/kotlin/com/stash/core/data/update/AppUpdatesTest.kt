@@ -17,11 +17,11 @@ class AppUpdatesTest {
         val u = AppUpdates.parseRelease(release())!!
         assertEquals("v0.9.122", u.tag)
         assertEquals("0.9.122", u.version)
-        assertEquals("https://github.com/rawnaldclark/Stash/releases/download/v0.9.122/Stash.apk", u.apkUrl)
+        assertEquals("https://github.com/Gokul3611/HIFI_music_app/releases/download/v0.9.122/Stash.apk", u.apkUrl)
         assertEquals(171_411_798L, u.sizeBytes)
         // As written, line ends made plain: ReleaseNotes reads them for the sheet.
         assertEquals("## What's new\n- **Paste links** from [Spotify](https://x)\n\n\n\n- Sync tab", u.notes)
-        assertEquals("https://github.com/rawnaldclark/Stash/releases/tag/v0.9.122", u.pageUrl)
+        assertEquals("https://github.com/Gokul3611/HIFI_music_app/releases/tag/v0.9.122", u.pageUrl)
     }
 
     @Test
@@ -36,10 +36,10 @@ class AppUpdatesTest {
     fun `the R8 mapping beside the apk is never taken for the update`() {
         // release.yml attaches mapping-<tag>.txt.gz to each release; whichever order GitHub lists them in, the APK wins.
         val mapping = """{"name":"mapping-v0.9.122.txt.gz","size":13135857,
-            "browser_download_url":"https://github.com/rawnaldclark/Stash/releases/download/v0.9.122/mapping-v0.9.122.txt.gz"}"""
+            "browser_download_url":"https://github.com/Gokul3611/HIFI_music_app/releases/download/v0.9.122/mapping-v0.9.122.txt.gz"}"""
         for (assets in listOf("$mapping,$APK", "$APK,$mapping")) {
             val u = AppUpdates.parseRelease(release(assets = assets))!!
-            assertEquals("https://github.com/rawnaldclark/Stash/releases/download/v0.9.122/Stash.apk", u.apkUrl)
+            assertEquals("https://github.com/Gokul3611/HIFI_music_app/releases/download/v0.9.122/Stash.apk", u.apkUrl)
             assertEquals(171_411_798L, u.sizeBytes)
         }
         // A release whose APK upload failed is no update, not the mapping.
@@ -73,6 +73,6 @@ class AppUpdatesTest {
 
     private companion object {
         const val APK = """{"name":"Stash.apk","size":171411798,
-            "browser_download_url":"https://github.com/rawnaldclark/Stash/releases/download/v0.9.122/Stash.apk"}"""
+            "browser_download_url":"https://github.com/Gokul3611/HIFI_music_app/releases/download/v0.9.122/Stash.apk"}"""
     }
 }
