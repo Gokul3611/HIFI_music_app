@@ -65,7 +65,30 @@ jobs:
         env:
           LOSSLESS_CONFIG_URL: "https://stash-tipjar.rawnaldclark.workers.dev/lossless.json"
           LOSSLESS_CONFIG_PUBKEY: "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAELiPYu7/k+TmVCojPEECT2w8tTnoy597StnnmS3vSiPxJ9AtluqhnIinmdknRi+h2ElUzkXYHoJjfzpoLGF46Cg"
-        run: ./gradlew testDebugUnitTest assembleDebug --no-daemon --no-parallel --max-workers=2 --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew testDebugUnitTest assembleDebug --no-daemon --no-parallel --max-workers=2 --stacktrace 2>&1 | tee android-build.log
+
+      - name: Surface Android build failure details
+        if: failure()
+        shell: bash
+        run: |
+          if [ -f android-build.log ]; then
+            details="$(tail -n 45 android-build.log)"
+            details="${details//'%'/'%25'}"
+            details="${details//$'\r'/'%0D'}"
+            details="${details//$'\n'/'%0A'}"
+            echo "::error title=Android build failure details::${details}"
+          fi
+
+      - name: Upload Android build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-build-log
+          path: android-build.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Prepare APK for Artifact
         run: |
