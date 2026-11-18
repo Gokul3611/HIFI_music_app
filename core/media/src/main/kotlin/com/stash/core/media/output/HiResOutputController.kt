@@ -164,6 +164,8 @@ class HiResOutputController @Inject constructor(
 
     @Volatile var mode: HiResOutputMode = HiResOutputMode.STANDARD
         private set
+    private val _modeFlow = MutableStateFlow(HiResOutputMode.STANDARD)
+    val modeFlow: StateFlow<HiResOutputMode> = _modeFlow.asStateFlow()
 
     /** Hi-res USB output needs Android 14's preferred mixer attributes. */
     val isSupported: Boolean get() = Build.VERSION.SDK_INT >= 34
@@ -185,6 +187,12 @@ class HiResOutputController @Inject constructor(
     val bitPerfectEngaged: StateFlow<Boolean> =
         output.map { it?.mixer == MixerPath.BIT_PERFECT }
             .stateIn(scope, SharingStarted.Eagerly, false)
+
+    /** Outputs that cannot safely receive two independently rendered crossfade players. */
+    val crossfadeHoldRequired: StateFlow<Boolean> =
+        combine(output, modeFlow) { state, currentMode ->
+            state?.mixer == MixerPath.BIT_PERFECT || currentMode == HiResOutputMode.ESP32_WIFI_DIRECT
+        }.stateIn(scope, SharingStarted.Eagerly, false)
 
     /**
      * The listener-facing explanation of [output], ready for the signal-path sheet. Tuning as the
@@ -407,6 +415,7 @@ class HiResOutputController @Inject constructor(
             Esp32SocketStreamer.close()
         }
         mode = newMode
+        _modeFlow.value = newMode
         if (newMode == HiResOutputMode.STANDARD || newMode == HiResOutputMode.ESP32_WIFI_DIRECT) releaseAll()
         // A new mode asks for different things: let refused configurations be tried again.
         refusals.clear()

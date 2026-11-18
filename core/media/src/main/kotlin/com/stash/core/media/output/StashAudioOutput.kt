@@ -195,7 +195,7 @@ class StashAudioOutput(
 
         // ESP32 Wi-Fi Direct: Stream uncompressed 32-bit PCM to ESP32 socket
         if (controller.mode == com.stash.core.data.prefs.HiResOutputMode.ESP32_WIFI_DIRECT) {
-            Esp32SocketStreamer.writePcm(buffer, inFormat)
+            Esp32SocketStreamer.writePcm(buffer, inFormat, streamSampleRate)
             inner.setVolume(0f)
 
             // Feed pure silence to inner AudioTrack so headphones/speaker produce 0 sound,

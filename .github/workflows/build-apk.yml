@@ -4,8 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - master
-      - main
+      - '**'
 
 permissions:
   contents: write
@@ -47,11 +46,26 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.0.12077973" "cmake;3.22.1" > /dev/null
 
-      - name: Build Debug APK
+      - name: Set up Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install ESP32 Arduino core
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@2.0.17
+
+      - name: Compile ESP32 firmware
+        run: |
+          mkdir -p dist/firmware
+          arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir dist/firmware firmware_wifi_softap
+
+      - name: Run unit tests and build Debug APK
         env:
           LOSSLESS_CONFIG_URL: "https://stash-tipjar.rawnaldclark.workers.dev/lossless.json"
           LOSSLESS_CONFIG_PUBKEY: "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAELiPYu7/k+TmVCojPEECT2w8tTnoy597StnnmS3vSiPxJ9AtluqhnIinmdknRi+h2ElUzkXYHoJjfzpoLGF46Cg"
-        run: ./gradlew assembleDebug --no-daemon --no-parallel --max-workers=2 --stacktrace
+        run: ./gradlew testDebugUnitTest assembleDebug --no-daemon --no-parallel --max-workers=2 --stacktrace
 
       - name: Prepare APK for Artifact
         run: |
@@ -62,7 +76,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Music-HiFi-App
-          path: dist/Music.apk
+          path: |
+            dist/Music.apk
+            dist/firmware/*.bin
           retention-days: 14
 
       - name: Create or Update GitHub Release
