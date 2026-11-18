@@ -61,7 +61,8 @@ jobs:
           set -o pipefail
           {
             mkdir -p dist/firmware
-            arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir dist/firmware firmware_wifi_softap
+            arduino-cli compile --fqbn esp32:esp32:esp32 --build-path dist/firmware firmware_wifi_softap
+            find dist/firmware -maxdepth 1 -type f -printf '%f\n' | sort
             ESP32_CORE="$(arduino-cli config get directories.data)/packages/esp32/hardware/esp32/2.0.17"
             APP_BIN="$(find dist/firmware -maxdepth 1 -type f -name '*.bin' ! -name '*.bootloader.bin' ! -name '*.partitions.bin' -print -quit)"
             BOOTLOADER_BIN="$(find dist/firmware -maxdepth 1 -type f -name '*.bootloader.bin' -print -quit)"
@@ -95,7 +96,14 @@ jobs:
         run: |
           for log_file in firmware-build.log android-build.log; do
             if [ -f "$log_file" ]; then
-              details="$(tail -n 45 "$log_file")"
+              if [ "$log_file" = "android-build.log" ]; then
+                details="$(grep -E '(^e: |^FAILURE:|What went wrong:|Execution failed for task|Unresolved reference|Type mismatch|Cannot infer|Expecting |Compilation error)' "$log_file" | tail -n 45 || true)"
+                if [ -z "$details" ]; then
+                  details="$(tail -n 45 "$log_file")"
+                fi
+              else
+                details="$(tail -n 45 "$log_file")"
+              fi
               details="${details//'%'/'%25'}"
               details="${details//$'\r'/'%0D'}"
               details="${details//$'\n'/'%0A'}"
