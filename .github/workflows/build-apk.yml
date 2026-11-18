@@ -95,13 +95,35 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          for log_file in firmware-build.log android-build.log; do
+          python3 - <<'PY' > android-test-failures.log
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          reports = list(Path("core/media/build/test-results/testDebugUnitTest").glob("TEST-*.xml"))
+          if not reports:
+              print("No JUnit XML reports were produced.")
+          for report in reports:
+              root = ET.parse(report).getroot()
+              for case in root.iter("testcase"):
+                  for result in case:
+                      if result.tag not in {"failure", "error"}:
+                          continue
+                      print(f"{case.get('classname')}#{case.get('name')}: {result.get('type', result.tag)}")
+                      if result.get("message"):
+                          print(result.get("message"))
+                      if result.text:
+                          print("\n".join(result.text.splitlines()[:18]))
+                      print()
+          PY
+          for log_file in firmware-build.log android-build.log android-test-failures.log; do
             if [ -f "$log_file" ]; then
               if [ "$log_file" = "android-build.log" ]; then
-                details="$(grep -E '(^e: |^FAILURE:|What went wrong:|Execution failed for task|Unresolved reference|Type mismatch|Cannot infer|Expecting |Compilation error)' "$log_file" | tail -n 45 || true)"
+                details="$(grep -E '(^e: |^FAILURE:|What went wrong:|Execution failed for task|Unresolved reference|Type mismatch|Cannot infer|Expecting |Compilation error|There were failing tests|tests? failed|FAILED)' "$log_file" | tail -n 45 || true)"
                 if [ -z "$details" ]; then
                   details="$(tail -n 45 "$log_file")"
                 fi
+              elif [ "$log_file" = "android-test-failures.log" ]; then
+                details="$(head -n 65 "$log_file")"
               else
                 details="$(tail -n 45 "$log_file")"
               fi
@@ -120,6 +142,8 @@ jobs:
           path: |
             firmware-build.log
             android-build.log
+            android-test-failures.log
+            core/media/build/test-results/testDebugUnitTest/TEST-*.xml
           if-no-files-found: ignore
           retention-days: 7
 
