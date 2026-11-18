@@ -121,6 +121,10 @@ class StreamUrlCache @Inject constructor(
                 return null
             }
         }
+        if (url.forThisPlayOnly) {
+            synchronized(lock) { if (cache[trackId]?.url === url) cache.remove(trackId) }
+            return null
+        }
         // Outside the lock: appliesNow asks the system for the network. Only a lossless entry
         // pays for that question, and it is dropped only if a newer put hasn't replaced it.
         if (url.isLosslessLink() && dataSaver.appliesNow()) {
@@ -131,6 +135,10 @@ class StreamUrlCache @Inject constructor(
     }
 
     fun put(trackId: Long, url: StreamUrl) {
+        if (url.forThisPlayOnly) {
+            synchronized(lock) { cache.remove(trackId) }
+            return
+        }
         // Convert the server's absolute expiry into a remaining-lifetime
         // duration using the wall clock this once, then anchor it to the
         // monotonic clock. A non-positive TTL means the URL is already

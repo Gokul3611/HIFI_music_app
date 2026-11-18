@@ -145,6 +145,7 @@ class StashPlaybackService : MediaLibraryService() {
     @Inject lateinit var streamResolver: com.stash.core.media.streaming.StreamSourceRegistry
     @Inject lateinit var streamUrlCache: com.stash.core.media.streaming.StreamUrlCache
     @Inject lateinit var tidalStreamResolver: com.stash.core.media.streaming.TidalStreamResolver
+    @Inject lateinit var playingSongClock: com.stash.core.media.streaming.PlayingSongClock
 
 
     /**
@@ -774,6 +775,7 @@ class StashPlaybackService : MediaLibraryService() {
                 cloudLinkResolver, ::cloudHttpDataSource, ::cloudAuthorizedHttpDataSource,
             ),
             cloudCopies = cloudCopyFinder,
+            busyLookAhead = com.stash.core.media.streaming.BusyLookAhead(playingSongClock),
         )
         this.mediaSourceFactory = mediaSourceFactory
 
@@ -1877,6 +1879,14 @@ class StashPlaybackService : MediaLibraryService() {
                     nextTrackId = nextId,
                     positionMs = player.currentPosition,
                     durationMs = player.duration,
+                )
+                playingSongClock.publish(
+                    trackId = player.currentMediaItem?.mediaId?.toLongOrNull(),
+                    positionMs = player.currentPosition,
+                    durationMs = player.duration,
+                    playing = player.isPlaying,
+                    speed = player.playbackParameters.speed,
+                    joinLeadMs = if (crossfadeEnabled) crossfadeDurationMs else 0L,
                 )
                 delay(PREFETCH_POLL_INTERVAL_MS)
             }

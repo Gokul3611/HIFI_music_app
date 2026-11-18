@@ -54,4 +54,8 @@ data class StreamUrl(
     val isDash: Boolean = false,
     val isHls: Boolean = false,
     val isPreview: Boolean = false,
+    /** Epoch-ms until which a lossless source asked us not to retry; present on its lossy fallback. */
+    val losslessBusyUntilMs: Long? = null,
+    /** This fallback is valid for the current playback only; don't cache for a later play. */
+    val forThisPlayOnly: Boolean = false,
 )

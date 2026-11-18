@@ -66,6 +66,9 @@ class TidalStreamResolver @Inject constructor(
     suspend fun resolveAacOnly(track: TrackEntity): StreamUrl? {
         if (!client.isConfigured()) return null
         val lookup = client.lookup(track.toQuery(), allowAac = true, aacOnly = true)
+        if (lookup is com.stash.data.download.lossless.bitchord.TidalLookup.Busy) {
+            com.stash.data.download.lossless.noteLosslessBusy(lookup.untilMs)
+        }
         val s = (lookup as? com.stash.data.download.lossless.bitchord.TidalLookup.Found)?.stream ?: run {
             Log.d(TAG, "aac_only no_result id=${track.id} (${lookup.javaClass.simpleName})")
             return null

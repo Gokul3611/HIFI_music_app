@@ -61,6 +61,7 @@ class StashMediaSourceFactory(
     cloudUncachedDataSourceFactory: DataSource.Factory? = null,
     /** "Play my cloud copies first": told when a cloud copy won't open. Null in tests. */
     private val cloudCopies: CloudCopyFinder? = null,
+    private val busyLookAhead: BusyLookAhead? = null,
     /**
      * False in Download mode. Then only a file on the phone opens: every stream (a
      * placeholder's resolve, an http(s) URL, a cloud file) fails to open and is skipped,
@@ -220,8 +221,12 @@ class StashMediaSourceFactory(
                             urlCache.get(trackId)?.takeIf {
                                 (row?.soundCloudId == null && row?.source != com.stash.core.model.MusicSource.SOUNDCLOUD) || it.origin == "soundcloud"
                             } ?: (if (uri.getQueryParameter("sc") == "1" && row?.soundCloudId == null) null else placeholderEntity(trackDao, trackId, uri))
-                                ?.let { resolver.resolve(it, allowYouTube = true, allowYtDlp = true) }
-                                ?.also { urlCache.put(trackId, it) }
+                                ?.let { row ->
+                                    val first = resolver.resolve(row, allowYouTube = true, allowYtDlp = true)
+                                    (busyLookAhead?.settle(trackId, first) {
+                                        resolver.resolve(row, allowYouTube = true, allowYtDlp = true)
+                                    } ?: first)?.also { urlCache.put(trackId, it) }
+                                }
                         }
                     },
                     childFor = { item, resolved ->
