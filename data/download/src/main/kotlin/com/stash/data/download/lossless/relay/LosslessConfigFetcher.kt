@@ -143,8 +143,8 @@ class LosslessConfigFetcher @Inject constructor(
     /**
      * Populate [tidalRelay] and [relayKey] from the cached JSON, if any. Cheap; call before the first resolve.
      * The cache is not re-verified: it is only ever written from bytes that passed [verify],
-     * into app-private storage (`allowBackup=false`). When runtime config is enabled, a cold start without a cache
-     * falls back to [DEFAULT_INITIAL_CONFIG]. A blank URL or signing key keeps every relay disabled.
+     * into app-private storage (`allowBackup=false`). A cold start without a cache has no relay until a signed config
+     * is fetched. A blank URL or signing key keeps every relay disabled.
      */
     suspend fun loadCached() {
         if (!enabled) {
@@ -153,7 +153,7 @@ class LosslessConfigFetcher @Inject constructor(
             _updatedAt.value = 0L
             return
         }
-        val cached = readCache() ?: DEFAULT_INITIAL_CONFIG
+        val cached = readCache() ?: return
         parse(cached)?.let { apply(it) }
     }
 
@@ -283,7 +283,6 @@ class LosslessConfigFetcher @Inject constructor(
 
     private companion object {
         const val TAG = "LosslessConfig"
-        const val DEFAULT_INITIAL_CONFIG = """{"v":1,"relays":[],"updated_at":1794717358,"relay_key":"55d63668c70e1e10c016cd0dbdbff710ba1f3d011957270e02b2e962490dd8c6","tidal_relay_url":"https://stash-addon-tidal.stash-addons.workers.dev","tidal_relay_token":"7f36c37abcab2764dd0ece4ff9dd306494bc584472743611e5a381e604612418"}"""
         const val REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000L
 
         /** The first retry after a failure; each further failure in a row doubles it, up to [MAX_RETRY_INTERVAL_MS]. */
