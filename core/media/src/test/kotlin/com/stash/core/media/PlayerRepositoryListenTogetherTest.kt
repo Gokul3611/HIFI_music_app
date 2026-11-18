@@ -132,12 +132,22 @@ class PlayerRepositoryListenTogetherTest {
 
     @Test fun `without a session the same last song would have started autoplay radio`() {
         val repo = build(autoplay = autoplayOn)
+        val radioStarted = CompletableDeferred<Unit>()
+        coEvery { radioGenerator.start(any()) } coAnswers {
+            radioStarted.complete(Unit)
+            mockk<RadioSession>() to emptyList()
+        }
         sessionPlayer()
         repo.updateState(controller)
-        shadowOf(Looper.getMainLooper()).idle()
-        // Local recommendations run on Dispatchers.IO before the radio fallback.
-        // Draining Robolectric's main looper alone doesn't wait for that IO work.
-        coVerify(timeout = 5_000, exactly = 1) { radioGenerator.start(any()) }
+        // Local recommendations run on Dispatchers.IO; the radio fallback then resumes on Main.
+        // Pump Main while waiting so the coroutine can finish under Robolectric.
+        val deadline = System.currentTimeMillis() + 5_000
+        while (!radioStarted.isCompleted && System.currentTimeMillis() < deadline) {
+            shadowOf(Looper.getMainLooper()).idle()
+            Thread.sleep(10)
+        }
+        assertThat(radioStarted.isCompleted).isTrue()
+        coVerify(exactly = 1) { radioGenerator.start(any()) }
     }
 
     @Test fun `during a session next-track prefetch does nothing`() = runTest {
