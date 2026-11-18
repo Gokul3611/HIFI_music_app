@@ -99,7 +99,7 @@ jobs:
           from pathlib import Path
           import xml.etree.ElementTree as ET
 
-          reports = list(Path("core/media/build/test-results/testDebugUnitTest").glob("TEST-*.xml"))
+          reports = list(Path(".").glob("**/build/test-results/testDebugUnitTest/TEST-*.xml"))
           if not reports:
               print("No JUnit XML reports were produced.")
           for report in reports:
