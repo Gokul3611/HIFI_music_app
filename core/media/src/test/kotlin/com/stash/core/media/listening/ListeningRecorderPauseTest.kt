@@ -61,6 +61,7 @@ class ListeningRecorderPauseTest {
             com.stash.core.model.RadioStartResult.NoStation
         override fun stopRadio() = Unit
         override val radioSeedLabel: StateFlow<String?> = MutableStateFlow(null)
+        override suspend fun getSimilarTracks(seed: Track, limit: Int): List<Track> = emptyList()
         override suspend fun addNext(track: Track) = false
         override suspend fun addToQueue(track: Track) = false
         override suspend fun addToQueue(tracks: List<Track>) = false
