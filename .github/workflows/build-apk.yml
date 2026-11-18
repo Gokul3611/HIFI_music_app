@@ -67,12 +67,13 @@ jobs:
             APP_BIN="$(find dist/firmware -maxdepth 1 -type f -name '*.bin' ! -name '*.bootloader.bin' ! -name '*.partitions.bin' -print -quit)"
             BOOTLOADER_BIN="$(find dist/firmware -maxdepth 1 -type f -name '*.bootloader.bin' -print -quit)"
             PARTITIONS_BIN="$(find dist/firmware -maxdepth 1 -type f -name '*.partitions.bin' -print -quit)"
-            ESPTOOL="$ESP32_CORE/tools/esptool/esptool.py"
-            if [[ -z "$APP_BIN" || -z "$BOOTLOADER_BIN" || -z "$PARTITIONS_BIN" || ! -f "$ESPTOOL" ]]; then
+            ESPTOOL_DIR="$(find "$(arduino-cli config get directories.data)/packages/esp32/tools/esptool_py" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+            if [[ -z "$APP_BIN" || -z "$BOOTLOADER_BIN" || -z "$PARTITIONS_BIN" || ! -f "$ESPTOOL_DIR/esptool/__init__.py" ]]; then
               echo "Arduino ESP32 compiler did not produce the expected flash images." >&2
+              echo "APP_BIN=$APP_BIN BOOTLOADER_BIN=$BOOTLOADER_BIN PARTITIONS_BIN=$PARTITIONS_BIN ESPTOOL_DIR=$ESPTOOL_DIR" >&2
               exit 1
             fi
-            python3 "$ESPTOOL" --chip esp32 merge_bin \
+            PYTHONPATH="$ESPTOOL_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 -m esptool --chip esp32 merge_bin \
               -o dist/firmware/ESP32-WiFi-SoftAP-full-flash.bin \
               --flash_mode keep --flash_freq keep --flash_size keep \
               0x1000 "$BOOTLOADER_BIN" \
