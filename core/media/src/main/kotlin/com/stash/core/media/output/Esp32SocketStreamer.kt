@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.OutputStream
+import java.io.IOException
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -29,6 +30,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object Esp32SocketStreamer {
     private const val TAG = "Esp32SocketStreamer"
+    private const val CONTROL_PORT = 8889
+    private const val SAMPLE_RATE_ACK_TIMEOUT_MS = 1200
 
     // Default ESP32 hotspot IP address and port
     @Volatile var espHost: String = "192.168.43.1"
@@ -45,6 +48,7 @@ object Esp32SocketStreamer {
         val host: String = espHost,
         val port: Int = espPort,
         val activeDacMode: DacMode = DacMode.PCM5102A,
+        val sampleRateHz: Int? = null,
         val isHardwareVerified: Boolean = false,
         val latencyMs: Long? = null,
         val rssiDbm: Int? = null,
@@ -57,44 +61,8 @@ object Esp32SocketStreamer {
     val status: StateFlow<Esp32Status> = _status.asStateFlow()
 
     @Volatile var dacMode: DacMode = DacMode.PCM5102A
-        set(value) {
-            field = value
-            sendControlPacket(value.code)
-        }
-
-    fun sendControlPacket(modeCode: Byte = dacMode.code) {
-        scope.launch {
-            // 1. Send Out-of-Band UDP Mode Control to Port 8889 (Zero TCP Audio Stream Pollution)
-            try {
-                val udpSocket = DatagramSocket()
-                val message = "MODE:$modeCode".toByteArray()
-                val targetAddr = InetAddress.getByName(espHost)
-                val packet = DatagramPacket(message, message.size, targetAddr, 8889)
-                udpSocket.send(packet)
-                udpSocket.close()
-                Log.i(TAG, "Sent out-of-band UDP DAC mode: mode=$modeCode to $espHost:8889")
-            } catch (e: Exception) {
-                Log.w(TAG, "UDP mode packet note: ${e.message}")
-            }
-
-            // 2. Fallback: also send on TCP socket if connected (Backward compatibility)
-            try {
-                val os = outputStream ?: return@launch
-                val packet = byteArrayOf(
-                    'H'.code.toByte(),
-                    'I'.code.toByte(),
-                    'F'.code.toByte(),
-                    'I'.code.toByte(),
-                    modeCode,
-                    0.toByte(),
-                    0.toByte(),
-                    0.toByte()
-                )
-                os.write(packet)
-                os.flush()
-            } catch (e: Exception) {}
-        }
-    }
+        private set
+    private val modeSwitchGeneration = java.util.concurrent.atomic.AtomicLong()
 
     /**
      * Sends a hardware mode switch command to ESP32 with strict two-way ACK verification.
@@ -105,48 +73,44 @@ object Esp32SocketStreamer {
         onResult: ((Boolean, String) -> Unit)? = null,
     ) {
         dacMode = newMode
+        val requestGeneration = modeSwitchGeneration.incrementAndGet()
         scope.launch {
             var confirmed = false
-            var responseMsg = ""
-            var datagramSocket: DatagramSocket? = null
+            val previousMode = _status.value.activeDacMode
+            var responseMsg = "No acknowledgement received from ESP32."
             try {
-                datagramSocket = DatagramSocket()
-                datagramSocket.soTimeout = timeoutMs
-
-                val msg = "MODE:${newMode.code}".toByteArray()
-                val target = InetAddress.getByName(espHost)
-                val sendPacket = DatagramPacket(msg, msg.size, target, 8889)
-                datagramSocket.send(sendPacket)
-
-                val buffer = ByteArray(128)
-                val recvPacket = DatagramPacket(buffer, buffer.size)
-                datagramSocket.receive(recvPacket)
-                val reply = String(recvPacket.data, 0, recvPacket.length).trim()
+                val reply = requestUdpCommand(
+                    espHost,
+                    Esp32WireProtocol.modeCommand(newMode.code),
+                    timeoutMs,
+                )
                 Log.i(TAG, "ESP32 Mode Switch ACK: $reply")
 
-                if (reply.contains("MODE_ACK:${newMode.code}")) {
+                if (Esp32WireProtocol.isModeAcknowledgement(reply, newMode.code)) {
                     confirmed = true
                     responseMsg = "Hardware confirmed: Switched to ${newMode.label}"
                 } else {
-                    responseMsg = "ESP32 replied with ACK: $reply"
-                    confirmed = true
+                    responseMsg = "ESP32 rejected DAC mode ${newMode.code}: $reply"
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Mode switch UDP ACK timeout: ${e.message}")
                 responseMsg = "No ACK received from ESP32 ($espHost:8889). Check Wi-Fi connection."
-            } finally {
-                try { datagramSocket?.close() } catch (e: Exception) {}
             }
 
-            _status.value = _status.value.copy(
-                activeDacMode = newMode,
-                isHardwareVerified = confirmed,
-                statusMessage = responseMsg,
-                lastVerifiedAt = System.currentTimeMillis()
-            )
+            if (modeSwitchGeneration.get() == requestGeneration) {
+                if (!confirmed) dacMode = previousMode
+                _status.value = _status.value.copy(
+                    activeDacMode = if (confirmed) newMode else previousMode,
+                    isHardwareVerified = confirmed,
+                    statusMessage = responseMsg,
+                    lastVerifiedAt = System.currentTimeMillis()
+                )
+            }
 
             withContext(Dispatchers.Main) {
-                onResult?.invoke(confirmed, responseMsg)
+                if (modeSwitchGeneration.get() == requestGeneration) {
+                    onResult?.invoke(confirmed, responseMsg)
+                }
             }
         }
     }
@@ -160,53 +124,26 @@ object Esp32SocketStreamer {
         onResult: ((Boolean, Esp32Status) -> Unit)? = null,
     ) {
         scope.launch {
-            var datagramSocket: DatagramSocket? = null
-            var success = false
             try {
-                datagramSocket = DatagramSocket()
-                datagramSocket.soTimeout = timeoutMs
-
-                val msg = "GET_STATUS".toByteArray()
-                val target = InetAddress.getByName(host)
-                val sendPacket = DatagramPacket(msg, msg.size, target, 8889)
-
                 val startTime = System.currentTimeMillis()
-                datagramSocket.send(sendPacket)
-
-                val buffer = ByteArray(256)
-                val recvPacket = DatagramPacket(buffer, buffer.size)
-                datagramSocket.receive(recvPacket)
+                val response = requestUdpCommand(host, "GET_STATUS", timeoutMs)
                 val latency = System.currentTimeMillis() - startTime
-
-                val response = String(recvPacket.data, 0, recvPacket.length).trim()
                 Log.i(TAG, "ESP32 UDP Status response: $response (latency=${latency}ms)")
-
-                var verifiedMode = dacMode
-                if (response.contains("MODE:2")) {
-                    verifiedMode = DacMode.INTERNAL_DAC
-                } else if (response.contains("MODE:1")) {
-                    verifiedMode = DacMode.PCM5102A
-                }
-
-                // Extract RSSI
-                val rssiMatch = Regex("RSSI:(-?\\d+)").find(response)
-                val rssi = rssiMatch?.groupValues?.getOrNull(1)?.toIntOrNull()
-
-                val bufferMatch = Regex("BUFFER:(\\d+%)").find(response)
-                val bufferPct = bufferMatch?.groupValues?.getOrNull(1)
+                val remoteStatus = Esp32WireProtocol.parseStatus(response)
+                    ?: throw IOException("Invalid ESP32 status response")
 
                 val newStatus = _status.value.copy(
                     host = host,
-                    activeDacMode = verifiedMode,
+                    activeDacMode = remoteStatus.mode,
+                    sampleRateHz = remoteStatus.sampleRateHz,
                     isHardwareVerified = true,
                     latencyMs = latency,
-                    rssiDbm = rssi,
-                    bufferPct = bufferPct,
-                    statusMessage = "Verified via UDP in ${latency}ms (Signal: ${rssi ?: -50} dBm)",
+                    rssiDbm = remoteStatus.rssiDbm,
+                    bufferPct = remoteStatus.bufferPct,
+                    statusMessage = "Verified via UDP in ${latency}ms (Signal: ${remoteStatus.rssiDbm ?: -50} dBm)",
                     lastVerifiedAt = System.currentTimeMillis()
                 )
                 _status.value = newStatus
-                success = true
 
                 withContext(Dispatchers.Main) {
                     onResult?.invoke(true, newStatus)
@@ -222,33 +159,57 @@ object Esp32SocketStreamer {
                 withContext(Dispatchers.Main) {
                     onResult?.invoke(false, failStatus)
                 }
-            } finally {
-                try { datagramSocket?.close() } catch (e: Exception) {}
             }
         }
     }
 
-    private var socket: Socket? = null
-    private var outputStream: OutputStream? = null
+    @Volatile private var socket: Socket? = null
+    @Volatile private var outputStream: OutputStream? = null
     private val isConnecting = AtomicBoolean(false)
     val isConnected = AtomicBoolean(false)
+    private val connectionLock = Any()
+    private var connectionGeneration = 0L
 
     // Decoupled asynchronous transmission queue to guarantee zero blocking on ExoPlayer audio thread
-    private val sendQueue = java.util.concurrent.LinkedBlockingQueue<ByteArray>(48)
+    private data class AudioChunk(val bytes: ByteArray, val sampleRateHz: Int)
+    private val sendQueue = java.util.concurrent.LinkedBlockingQueue<AudioChunk>(48)
     @Volatile private var senderThread: Thread? = null
 
-    private fun startSenderThread(os: OutputStream) {
+    private fun startSenderThread(os: OutputStream, generation: Long) {
         senderThread?.interrupt()
         senderThread = Thread({
+            var configuredSampleRate = 0
+            var rejectedSampleRate: Int? = null
             try {
-                while (isConnected.get() && !Thread.currentThread().isInterrupted) {
+                while (isCurrentConnection(generation, os) && !Thread.currentThread().isInterrupted) {
                     val chunk = sendQueue.poll(500, java.util.concurrent.TimeUnit.MILLISECONDS) ?: continue
-                    os.write(chunk)
+                    if (!isCurrentConnection(generation, os)) break
+
+                    if (chunk.sampleRateHz != configuredSampleRate) {
+                        if (rejectedSampleRate == chunk.sampleRateHz) continue
+                        rejectedSampleRate = null
+                        val rateReply = requestUdpCommand(
+                            espHost,
+                            Esp32WireProtocol.sampleRateCommand(chunk.sampleRateHz),
+                            SAMPLE_RATE_ACK_TIMEOUT_MS,
+                        )
+                        if (!Esp32WireProtocol.isSampleRateAcknowledgement(rateReply, chunk.sampleRateHz)) {
+                            rejectedSampleRate = chunk.sampleRateHz
+                            _status.value = _status.value.copy(
+                                statusMessage = "ESP32 rejected ${chunk.sampleRateHz} Hz audio: $rateReply",
+                            )
+                            continue
+                        }
+                        configuredSampleRate = chunk.sampleRateHz
+                        _status.value = _status.value.copy(sampleRateHz = configuredSampleRate)
+                    }
+
+                    os.write(chunk.bytes)
                 }
             } catch (e: Exception) {
-                if (isConnected.get()) {
+                if (isCurrentConnection(generation, os)) {
                     Log.w(TAG, "Sender thread error: ${e.message}")
-                    close()
+                    closeConnection(generation, os)
                 }
             }
         }, "Esp32TcpSender").apply {
@@ -259,6 +220,23 @@ object Esp32SocketStreamer {
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private fun requestUdpCommand(host: String, command: String, timeoutMs: Int): String {
+        val address = InetAddress.getByName(host)
+        val bytes = command.toByteArray(Charsets.US_ASCII)
+        DatagramSocket().use { udp ->
+            udp.soTimeout = timeoutMs
+            udp.send(DatagramPacket(bytes, bytes.size, address, CONTROL_PORT))
+
+            val responseBytes = ByteArray(128)
+            val response = DatagramPacket(responseBytes, responseBytes.size)
+            udp.receive(response)
+            if (response.address != address || response.port != CONTROL_PORT) {
+                throw IOException("Unexpected UDP reply from ${response.address}:${response.port}")
+            }
+            return String(response.data, 0, response.length, Charsets.US_ASCII).trim()
+        }
+    }
 
     // Reusable conversion buffer on the audio thread (zero GC churn)
     private var outBytes = ByteArray(16384)
@@ -272,31 +250,28 @@ object Esp32SocketStreamer {
         onResult: ((Boolean, String) -> Unit)? = null,
     ) {
         if (isConnected.get()) {
-            onResult?.invoke(true, "Already connected to $host:$port")
-            return
+            if (espHost == host && espPort == port) {
+                onResult?.invoke(true, "Already connected to $host:$port")
+                return
+            }
+            close()
         }
-        if (isConnecting.get()) return
+        if (!isConnecting.compareAndSet(false, true)) return
 
-        isConnecting.set(true)
+        val generation = synchronized(connectionLock) { connectionGeneration }
         _status.value = _status.value.copy(isConnecting = true, host = host, port = port, statusMessage = "Connecting to $host:$port...")
 
         scope.launch {
+            var pendingSocket: Socket? = null
             try {
                 Log.i(TAG, "Connecting to ESP32 Hi-Fi Audio Server at $host:$port...")
-                val sock = Socket()
+                val sock = Socket().also { pendingSocket = it }
                 sock.tcpNoDelay = true
                 sock.sendBufferSize = 64 * 1024
                 sock.connect(InetSocketAddress(host, port), 3000)
 
                 val os = sock.getOutputStream()
                 val ins = sock.getInputStream()
-
-                socket = sock
-                outputStream = os
-                isConnected.set(true)
-                espHost = host
-                espPort = port
-                startSenderThread(os)
 
                 // Try to read initial greeting from ESP32
                 var verifiedMode = dacMode
@@ -306,48 +281,60 @@ object Esp32SocketStreamer {
                     val reader = ins.bufferedReader()
                     val line = reader.readLine()
                     Log.i(TAG, "Received greeting from ESP32: $line")
-                    if (line != null && line.contains("HIFI_CONNECTED")) {
+                    val greetingMode = line?.let(Esp32WireProtocol::parseGreeting)
+                    if (greetingMode != null) {
                         hardwareVerified = true
-                        if (line.contains("MODE:2")) {
-                            verifiedMode = DacMode.INTERNAL_DAC
-                        } else if (line.contains("MODE:1")) {
-                            verifiedMode = DacMode.PCM5102A
-                        }
+                        verifiedMode = greetingMode
                     }
                     sock.soTimeout = 0
                 } catch (e: Exception) {
                     sock.soTimeout = 0
                 }
 
-                _status.value = _status.value.copy(
-                    isConnected = true,
-                    isConnecting = false,
-                    host = host,
-                    port = port,
-                    activeDacMode = verifiedMode,
-                    isHardwareVerified = hardwareVerified,
-                    statusMessage = if (hardwareVerified) "Connected & Hardware Confirmed" else "Connected to $host:$port",
-                    lastVerifiedAt = System.currentTimeMillis()
-                )
+                val installed = synchronized(connectionLock) {
+                    if (connectionGeneration != generation || !isConnecting.get()) {
+                        false
+                    } else {
+                        dacMode = verifiedMode
+                        socket = sock
+                        outputStream = os
+                        espHost = host
+                        espPort = port
+                        isConnected.set(true)
+                        _status.value = _status.value.copy(
+                            isConnected = true,
+                            isConnecting = false,
+                            host = host,
+                            port = port,
+                            activeDacMode = verifiedMode,
+                            isHardwareVerified = hardwareVerified,
+                            statusMessage = if (hardwareVerified) "Connected & Hardware Confirmed" else "Connected to $host:$port",
+                            lastVerifiedAt = System.currentTimeMillis()
+                        )
+                        startSenderThread(os, generation)
+                        true
+                    }
+                }
+                if (!installed) {
+                    sock.close()
+                    return@launch
+                }
 
-                sendControlPacket(dacMode.code)
                 withContext(Dispatchers.Main) {
                     onResult?.invoke(true, "Connected to ESP32 at $host:$port")
                 }
                 Log.i(TAG, "Connected to ESP32! Bit-perfect 32-bit PCM stream active.")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to connect to ESP32 ($host:$port): ${e.message}")
-                close()
-                _status.value = _status.value.copy(
-                    isConnected = false,
-                    isConnecting = false,
-                    statusMessage = "Connection failed: ${e.message}"
-                )
+                runCatching { pendingSocket?.close() }
+                closeConnection(generation, null, "Connection failed: ${e.message}")
                 withContext(Dispatchers.Main) {
                     onResult?.invoke(false, "Connection failed: ${e.message}")
                 }
             } finally {
-                isConnecting.set(false)
+                synchronized(connectionLock) {
+                    if (connectionGeneration == generation) isConnecting.set(false)
+                }
             }
         }
     }
@@ -401,33 +388,34 @@ object Esp32SocketStreamer {
                 Log.i(TAG, "Sent UDP discovery broadcasts to ${broadcastTargets.size} targets on port 8889")
 
                 val buffer = ByteArray(128)
-                val responsePacket = DatagramPacket(buffer, buffer.size)
-                datagramSocket.receive(responsePacket)
+                val deadlineNanos = System.nanoTime() + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(2500)
+                while (foundIp == null) {
+                    val remainingMs = java.util.concurrent.TimeUnit.NANOSECONDS
+                        .toMillis(deadlineNanos - System.nanoTime())
+                    if (remainingMs <= 0) break
+                    datagramSocket.soTimeout = remainingMs.coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
 
-                val response = String(responsePacket.data, 0, responsePacket.length)
-                if (response.contains("HIFI_DAC_HERE")) {
-                    val ip = responsePacket.address?.hostAddress
-                    if (ip != null) {
-                        Log.i(TAG, "Auto-discovered ESP32 Hi-Fi Receiver at IP: $ip")
-                        foundIp = ip
-                        espHost = ip
-                        var verifiedMode = dacMode
-                        if (response.contains("MODE:2")) {
-                            verifiedMode = DacMode.INTERNAL_DAC
-                        } else if (response.contains("MODE:1")) {
-                            verifiedMode = DacMode.PCM5102A
-                        }
-                        _status.value = _status.value.copy(
-                            host = ip,
-                            activeDacMode = verifiedMode,
-                            isHardwareVerified = true,
-                            statusMessage = "Discovered at $ip (${verifiedMode.label})"
-                        )
-                        withContext(Dispatchers.Main) {
-                            onDiscovered?.invoke(ip)
-                        }
-                        connect(ip)
+                    val responsePacket = DatagramPacket(buffer, buffer.size)
+                    datagramSocket.receive(responsePacket)
+                    val response = String(responsePacket.data, 0, responsePacket.length, Charsets.US_ASCII).trim()
+                    val discoveredMode = Esp32WireProtocol.parseDiscovery(response) ?: continue
+                    val ip = responsePacket.address?.hostAddress ?: continue
+
+                    Log.i(TAG, "Auto-discovered ESP32 Hi-Fi Receiver at IP: $ip")
+                    foundIp = ip
+                    espHost = ip
+                    _status.value = _status.value.copy(
+                        host = ip,
+                        activeDacMode = discoveredMode,
+                        isHardwareVerified = true,
+                        statusMessage = "Discovered at $ip (${discoveredMode.label})",
+                    )
+                    withContext(Dispatchers.Main) {
+                        onDiscovered?.invoke(ip)
                     }
+                    connect(ip, onResult = { connected, _ ->
+                        if (!connected) onFailed?.invoke()
+                    })
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "UDP Auto-Discovery timed out or failed: ${e.message}")
@@ -448,7 +436,9 @@ object Esp32SocketStreamer {
                             withContext(Dispatchers.Main) {
                                 onDiscovered?.invoke(ip)
                             }
-                            connect(ip)
+                            connect(ip, onResult = { connected, _ ->
+                                if (!connected) onFailed?.invoke()
+                            })
                         }
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
@@ -464,14 +454,14 @@ object Esp32SocketStreamer {
      * Converts decoded Media3 ByteBuffer into 32-bit signed little-endian PCM
      * and writes directly to the ESP32 socket.
      */
-    fun writePcm(buffer: ByteBuffer, inFormat: SampleFormat) {
+    @Synchronized
+    fun writePcm(buffer: ByteBuffer, inFormat: SampleFormat, sampleRateHz: Int) {
         if (!isConnected.get()) {
-            connect()
-            return
+            if (!isConnecting.get()) connect()
+            if (!isConnecting.get()) return
         }
 
         try {
-            val os = outputStream ?: return
             val view = buffer.duplicate().order(ByteOrder.nativeOrder())
             val remaining = view.remaining()
             if (remaining == 0) return
@@ -531,9 +521,10 @@ object Esp32SocketStreamer {
             // Non-blocking hand-off to dedicated network thread (Zero ExoPlayer thread stalling)
             val chunk = ByteArray(byteCount)
             System.arraycopy(outBytes, 0, chunk, 0, byteCount)
-            if (!sendQueue.offer(chunk)) {
+            val queued = AudioChunk(chunk, sampleRateHz)
+            if (!sendQueue.offer(queued)) {
                 sendQueue.poll() // drop oldest chunk to stay locked to real-time low latency
-                sendQueue.offer(chunk)
+                sendQueue.offer(queued)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Socket write error: ${e.message}. Reconnecting...")
@@ -547,24 +538,101 @@ object Esp32SocketStreamer {
         }
     }
 
-    fun close() {
-        isConnected.set(false)
-        isConnecting.set(false)
-        senderThread?.interrupt()
-        senderThread = null
-        sendQueue.clear()
-        try {
-            outputStream?.close()
-        } catch (e: Exception) {}
-        try {
-            socket?.close()
-        } catch (e: Exception) {}
-        outputStream = null
-        socket = null
-        _status.value = _status.value.copy(
-            isConnected = false,
-            isConnecting = false,
-            statusMessage = "Disconnected",
-        )
+    fun close() = closeConnection()
+
+    private fun isCurrentConnection(generation: Long, os: OutputStream): Boolean =
+        synchronized(connectionLock) {
+            connectionGeneration == generation && outputStream === os && isConnected.get()
+        }
+
+    private fun closeConnection(
+        expectedGeneration: Long? = null,
+        expectedOutput: OutputStream? = null,
+        message: String = "Disconnected",
+    ) {
+        val oldResources = synchronized(connectionLock) {
+            if (expectedGeneration != null && connectionGeneration != expectedGeneration) return
+            if (expectedOutput != null && outputStream !== expectedOutput) return
+
+            connectionGeneration++
+            isConnected.set(false)
+            isConnecting.set(false)
+            val oldThread = senderThread
+            val oldOutput = outputStream
+            val oldSocket = socket
+            senderThread = null
+            outputStream = null
+            socket = null
+            sendQueue.clear()
+            _status.value = _status.value.copy(
+                isConnected = false,
+                isConnecting = false,
+                isHardwareVerified = false,
+                sampleRateHz = null,
+                latencyMs = null,
+                rssiDbm = null,
+                bufferPct = null,
+                statusMessage = message,
+            )
+            Triple(oldThread, oldOutput, oldSocket)
+        }
+
+        oldResources.first?.interrupt()
+        try { oldResources.second?.close() } catch (_: Exception) {}
+        try { oldResources.third?.close() } catch (_: Exception) {}
+    }
+
+}
+
+internal object Esp32WireProtocol {
+    data class DeviceStatus(
+        val mode: Esp32SocketStreamer.DacMode,
+        val sampleRateHz: Int?,
+        val rssiDbm: Int?,
+        val bufferPct: String?,
+    )
+
+    private val modePattern = Regex("(?:^|[:,\\s])MODE:([12])(?:[,\\s]|$)")
+    private val ratePattern = Regex("(?:^|,)RATE:(\\d+)(?:,|$)")
+    private val rssiPattern = Regex("(?:^|,)RSSI:(-?\\d+)(?:,|$)")
+    private val bufferPattern = Regex("(?:^|,)BUFFER:(100|[0-9]?[0-9])%(?:,|$)")
+
+    fun modeCommand(modeCode: Byte): String = "MODE:${modeCode.toInt()}"
+
+    fun sampleRateCommand(sampleRateHz: Int): String = "RATE:$sampleRateHz"
+
+    fun isModeAcknowledgement(reply: String, expectedMode: Byte): Boolean =
+        reply.trim() == "MODE_ACK:${expectedMode.toInt()}"
+
+    fun isSampleRateAcknowledgement(reply: String, expectedRateHz: Int): Boolean =
+        reply.trim() == "RATE_ACK:$expectedRateHz"
+
+    fun parseDiscovery(reply: String): Esp32SocketStreamer.DacMode? {
+        if (!reply.startsWith("HIFI_DAC_HERE")) return null
+        return modePattern.find(reply)?.groupValues?.getOrNull(1)?.toIntOrNull()?.toMode()
+    }
+
+    fun parseGreeting(reply: String): Esp32SocketStreamer.DacMode? {
+        if (!reply.startsWith("HIFI_CONNECTED")) return null
+        return modePattern.find(reply)?.groupValues?.getOrNull(1)?.toIntOrNull()?.toMode()
+    }
+
+    fun parseStatus(reply: String): DeviceStatus? {
+        if (!reply.startsWith("HIFI_STATUS:")) return null
+        val mode = modePattern.find(reply)?.groupValues?.getOrNull(1)?.toIntOrNull()?.toMode() ?: return null
+        val sampleRateHz = ratePattern.find(reply)?.groupValues?.getOrNull(1)?.toIntOrNull()
+        if (reply.contains("RATE:") && sampleRateHz == null) return null
+        val rssiDbm = rssiPattern.find(reply)?.groupValues?.getOrNull(1)?.toIntOrNull()
+        if (reply.contains("RSSI:") && rssiDbm == null) return null
+        val bufferPct = bufferPattern.find(reply)?.groupValues?.getOrNull(1)?.let { "$it%" }
+        if (reply.contains("BUFFER:") && bufferPct == null) return null
+
+        return DeviceStatus(mode, sampleRateHz, rssiDbm, bufferPct)
+    }
+
+    private fun Int.toMode(): Esp32SocketStreamer.DacMode? = when (this) {
+        1 -> Esp32SocketStreamer.DacMode.PCM5102A
+        2 -> Esp32SocketStreamer.DacMode.INTERNAL_DAC
+        else -> null
     }
 }

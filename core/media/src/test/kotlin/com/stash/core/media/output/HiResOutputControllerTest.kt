@@ -146,6 +146,19 @@ class HiResOutputControllerTest {
         assertThat(plan.device).isNull()
     }
 
+    @Test fun `ESP32 direct output holds crossfade off as soon as the mode changes`() = runTest(dispatcher) {
+        runCurrent()
+        assertThat(controller.crossfadeHoldRequired.value).isFalse()
+
+        preference.setMode(HiResOutputMode.ESP32_WIFI_DIRECT)
+        runCurrent()
+        assertThat(controller.crossfadeHoldRequired.value).isTrue()
+
+        preference.setMode(HiResOutputMode.STANDARD)
+        runCurrent()
+        assertThat(controller.crossfadeHoldRequired.value).isFalse()
+    }
+
     @Test fun `a preview never becomes the audible output`() = runTest(dispatcher) {
         runCurrent()
         val preview = stream(mainPlayback = false, plan = bitPerfectPlan())

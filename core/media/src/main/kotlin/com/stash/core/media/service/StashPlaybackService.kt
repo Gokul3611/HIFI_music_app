@@ -445,12 +445,8 @@ class StashPlaybackService : MediaLibraryService() {
     /** Listen Together's session-scoped crossfade override. In memory only, so a crash can't leave crossfade off (spec §4). */
     private var crossfadeSuspended = false
 
-    /**
-     * Bit-perfect output holds crossfade off: a fade is two songs mixed, and a
-     * bit-perfect DAC takes one unaltered stream. Follows
-     * [com.stash.core.media.output.HiResOutputController.bitPerfectEngaged].
-     */
-    private var crossfadeHeldForBitPerfect = false
+    /** A single-stream output cannot receive the mix produced by two crossfade players. */
+    private var crossfadeHeldForExclusiveOutput = false
 
     /**
      * An "end of track" sleep timer holds crossfade off: the timer means "stop
@@ -897,7 +893,7 @@ class StashPlaybackService : MediaLibraryService() {
         serviceScope.launch { crossfadePreference.enabled.collect { onCrossfadePreference(it) } }
         serviceScope.launch { crossfadePreference.durationMs.collect { crossfadeDurationMs = it } }
         serviceScope.launch {
-            hiResOutputController.bitPerfectEngaged.collect { setCrossfadeHeldForBitPerfect(it) }
+            hiResOutputController.crossfadeHoldRequired.collect { setCrossfadeHeldForExclusiveOutput(it) }
         }
         // Tuning on or off: rebuild the idle players' outputs now, while silent, not on resume
         // or at the start of the next crossfade (see CrossfadeEngine.rebuildIdleOutputs).
@@ -1607,9 +1603,9 @@ class StashPlaybackService : MediaLibraryService() {
         onCrossfadeEnabledChanged(crossfadeAllowed())
     }
 
-    /** The preference, unless a Listen Together session, bit-perfect output or an end-of-track sleep timer holds it off. */
+    /** The preference, unless a Listen Together session, exclusive output or end-of-track sleep timer holds it off. */
     private fun crossfadeAllowed(): Boolean =
-        crossfadePrefEnabled && !crossfadeSuspended && !crossfadeHeldForBitPerfect && !crossfadeHeldForSleep
+        crossfadePrefEnabled && !crossfadeSuspended && !crossfadeHeldForExclusiveOutput && !crossfadeHeldForSleep
 
     /** Suspends or restores crossfade for a Listen Together session. */
     internal fun setCrossfadeSuspended(suspended: Boolean) {
@@ -1621,10 +1617,10 @@ class StashPlaybackService : MediaLibraryService() {
         onCrossfadeEnabledChanged(crossfadeAllowed())
     }
 
-    /** Holds crossfade off while the output is bit-perfect, and restores it after. */
-    internal fun setCrossfadeHeldForBitPerfect(held: Boolean) {
-        if (held == crossfadeHeldForBitPerfect) return
-        crossfadeHeldForBitPerfect = held
+    /** Holds crossfade off while a single-stream output is active, and restores it after. */
+    internal fun setCrossfadeHeldForExclusiveOutput(held: Boolean) {
+        if (held == crossfadeHeldForExclusiveOutput) return
+        crossfadeHeldForExclusiveOutput = held
         if (held) {
             crossfadeEngine?.cancelTransition()
             crossfadePreparedId = null
