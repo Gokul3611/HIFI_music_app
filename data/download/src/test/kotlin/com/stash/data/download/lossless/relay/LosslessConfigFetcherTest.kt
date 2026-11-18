@@ -166,12 +166,18 @@ class LosslessConfigFetcherTest {
     }
 
     @Test fun `disabled when url or key is blank`() = runTest {
-        val f = fetcher().also { it.publicKeyB64 = "" }
-        assertThat(f.enabled).isFalse()
-        assertThat(f.refresh()).isFalse()
+        val disabledFetchers = listOf(
+            fetcher().also { it.configUrl = "" },
+            fetcher().also { it.publicKeyB64 = "" },
+        )
+        disabledFetchers.forEach { f ->
+            assertThat(f.enabled).isFalse()
+            assertThat(f.refresh()).isFalse()
+            f.loadCached() // the built-in bootstrap config must not bypass the disabled gate
+            assertThat(f.tidalRelay.value).isNull()
+            assertThat(f.relayKey.value).isNull()
+        }
         assertThat(server.requestCount).isEqualTo(0)
-        f.loadCached() // no cache means no relay
-        assertThat(f.tidalRelay.value).isNull()
     }
 
     @Test fun `an oversized config body is rejected without applying`() = runTest {

@@ -143,9 +143,16 @@ class LosslessConfigFetcher @Inject constructor(
     /**
      * Populate [tidalRelay] and [relayKey] from the cached JSON, if any. Cheap; call before the first resolve.
      * The cache is not re-verified: it is only ever written from bytes that passed [verify],
-     * into app-private storage (`allowBackup=false`). Falls back to [DEFAULT_INITIAL_CONFIG] on cold start.
+     * into app-private storage (`allowBackup=false`). When runtime config is enabled, a cold start without a cache
+     * falls back to [DEFAULT_INITIAL_CONFIG]. A blank URL or signing key keeps every relay disabled.
      */
     suspend fun loadCached() {
+        if (!enabled) {
+            _relayKey.value = null
+            _tidalRelay.value = null
+            _updatedAt.value = 0L
+            return
+        }
         val cached = readCache() ?: DEFAULT_INITIAL_CONFIG
         parse(cached)?.let { apply(it) }
     }
