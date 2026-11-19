@@ -419,10 +419,11 @@ class DownloadManager @Inject constructor(
         // The fallback is on: Tidal's 320 kbps AAC first (JioSaavn misses many of these
         // tracks), then JioSaavn, then YouTube. AAC stays outside the lossless registry: it
         // must never satisfy a strict-lossless request. Only a definite "no AAC" (or a spent
-        // day) goes on to them: Tidal busy waits and tries again.
+        // day, or user-requested tap) goes on to them: Tidal busy waits and tries again in background sync.
+        val isUserRequested = kotlinx.coroutines.currentCoroutineContext()[com.stash.core.data.sync.ClaimedQueueRow]?.userRequested == true
         when (val aac = tidalAacStep(track)) {
             is AacStep.Saved -> return aac.result
-            is AacStep.Wait -> if (aac.reason != TidalAac.Reason.SPENT && !isStashMixTrack(track.id)) {
+            is AacStep.Wait -> if (aac.reason != TidalAac.Reason.SPENT && !isStashMixTrack(track.id) && !isUserRequested) {
                 return deferFor(track, aac.reason)
             }
             AacStep.NoAac -> Unit
@@ -441,12 +442,13 @@ class DownloadManager @Inject constructor(
         preResolvedUrl: String?,
         fallbackOn: Boolean,
     ): TrackDownloadResult {
+        val isUserRequested = kotlinx.coroutines.currentCoroutineContext()[com.stash.core.data.sync.ClaimedQueueRow]?.userRequested == true
         when (val aac = tidalAacStep(track, aacOnly = true)) {
             is AacStep.Saved -> return aac.result
             is AacStep.Wait -> {
                 // A spent day follows the fallback; busy, paced or failed waits whatever it is
-                // (but a Stash Mix song takes the lossy copy now, so a rotating mix doesn't empty out).
-                val goLossy = fallbackOn && (aac.reason == TidalAac.Reason.SPENT || isStashMixTrack(track.id))
+                // (but a Stash Mix song or a user-requested download takes the lossy copy now).
+                val goLossy = fallbackOn && (aac.reason == TidalAac.Reason.SPENT || isStashMixTrack(track.id) || isUserRequested)
                 if (!goLossy) return deferFor(track, aac.reason)
             }
             AacStep.NoAac -> if (!fallbackOn) {

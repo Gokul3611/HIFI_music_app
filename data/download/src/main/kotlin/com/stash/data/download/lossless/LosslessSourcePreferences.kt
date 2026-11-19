@@ -202,12 +202,10 @@ class LosslessSourcePreferences @Inject constructor(
     /**
      * When the lossless registry can't serve a track, whether to fall
      * through to the yt-dlp pipeline (m4a / Opus) instead of deferring
-     * the download. Defaults to `false` (v0.9.17+) — strict FLAC is the
-     * new contract.
+     * the download. Defaults to `true` (v0.9.131+) so music downloads
+     * are seamless and fall back to high quality instead of deferring.
      *
-     * Existing v0.9.16 users who flip this to true match the previous
-     * silent-fallback behaviour exactly; the legacy yt-dlp tier picker
-     * (MAX/BEST/HIGH/NORMAL/LOW) governs the fallback's quality.
+     * Existing users who explicitly toggle this off keep strict-FLAC behaviour.
      */
     /**
      * Tidal's 320 kbps AAC when a song has no lossless version, for streaming and
@@ -224,8 +222,8 @@ class LosslessSourcePreferences @Inject constructor(
     }
 
     val youtubeFallbackEnabled: Flow<Boolean> = context.losslessDataStore.data.map { prefs ->
-        prefs[youtubeFallbackKey] ?: false
-    }
+        prefs[youtubeFallbackKey] ?: true
+    }.distinctUntilChanged().catch { emit(true) }
 
     suspend fun youtubeFallbackEnabledNow(): Boolean = youtubeFallbackEnabled.first()
 

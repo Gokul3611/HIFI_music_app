@@ -59,7 +59,7 @@ class SingleTrackDownloadEnqueuer @Inject constructor(
     suspend fun enqueue(queueId: Long) {
         WorkManager.getInstance(context).enqueueUniqueWork(
             workName(queueId),
-            ExistingWorkPolicy.KEEP,
+            ExistingWorkPolicy.REPLACE,
             request(queueId, initialDelay = Duration.ZERO),
         )
     }

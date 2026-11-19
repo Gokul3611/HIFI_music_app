@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -127,7 +128,6 @@ class YtDlpManager @Inject constructor(
     suspend fun ensureFreshened() {
         initialize()
         runFreshenOnce()
-        warmUp()
     }
 
     /**
@@ -205,11 +205,13 @@ class YtDlpManager @Inject constructor(
     private suspend fun doNightlyUpdate() {
         withContext(Dispatchers.IO) {
             try {
-                val status = YoutubeDL.getInstance().updateYoutubeDL(
-                    context,
-                    YoutubeDL.UpdateChannel._NIGHTLY,
-                )
-                Log.i(TAG, "yt-dlp freshen (nightly): $status, version now ${getVersion()}")
+                withTimeoutOrNull(15_000L) {
+                    val status = YoutubeDL.getInstance().updateYoutubeDL(
+                        context,
+                        YoutubeDL.UpdateChannel._NIGHTLY,
+                    )
+                    Log.i(TAG, "yt-dlp freshen (nightly): $status, version now ${getVersion()}")
+                } ?: Log.w(TAG, "yt-dlp freshen (nightly) timed out after 15s; proceeding with current version")
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {

@@ -37,8 +37,8 @@ class LosslessSourcePreferencesYoutubeFallbackTest {
     }
 
     @Test
-    fun `youtubeFallbackEnabled defaults to false`() = runTest {
-        assertFalse(prefs.youtubeFallbackEnabledNow())
+    fun `youtubeFallbackEnabled defaults to true`() = runTest {
+        assertTrue(prefs.youtubeFallbackEnabledNow())
     }
 
     @Test

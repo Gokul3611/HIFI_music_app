@@ -872,7 +872,7 @@ class TrackDownloadWorker @AssistedInject constructor(
                             keptPath = trackEntity.filePath
                             val track = trackEntity.toDomain()
                             // The claimed row rides along, so a deferral defers this row only.
-                            val outcome = withContext(ClaimedQueueRow(queueItem.id)) {
+                            val outcome = withContext(ClaimedQueueRow(queueItem.id, queueItem.userRequested)) {
                                 downloadSlots.holding {
                                     trackDownloader.downloadTrack(
                                         track = track,
@@ -1292,7 +1292,7 @@ class TrackDownloadWorker @AssistedInject constructor(
         }
 
         val outcome = try {
-            withContext(ClaimedQueueRow(entry.id)) {
+            withContext(ClaimedQueueRow(entry.id, entry.userRequested)) {
                 downloadSlots.holding {
                     trackDownloader.downloadTrack(
                         track = track,

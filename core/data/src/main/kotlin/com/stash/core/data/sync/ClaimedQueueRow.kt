@@ -9,6 +9,6 @@ import kotlin.coroutines.CoroutineContext
  * (a sync's and a tap's), and deferring every IN_PROGRESS row of the song left the other runner's
  * finished download recorded on a row that said it was waiting.
  */
-class ClaimedQueueRow(val queueId: Long) : AbstractCoroutineContextElement(Key) {
+class ClaimedQueueRow(val queueId: Long, val userRequested: Boolean = false) : AbstractCoroutineContextElement(Key) {
     companion object Key : CoroutineContext.Key<ClaimedQueueRow>
 }

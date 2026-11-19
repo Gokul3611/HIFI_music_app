@@ -530,6 +530,18 @@ class StashApplication : Application(), Configuration.Provider {
                 }
             }.onFailure { Log.w("StashStartup", "lyrics miss-stamp reset failed", it) }
         }
+        // One-shot requeue of any tracks left waiting in WAITING_FOR_LOSSLESS
+        // now that YouTube fallback is enabled by default.
+        applicationScope.launch {
+            runCatching {
+                val prefs = getSharedPreferences("stash_migrations", MODE_PRIVATE)
+                if (!prefs.getBoolean("fallback_waiting_lossless_requeued_v1", false)) {
+                    val count = downloadQueueDao.requeueWaitingForLossless()
+                    prefs.edit().putBoolean("fallback_waiting_lossless_requeued_v1", true).apply()
+                    Log.i("StashStartup", "requeued $count waiting-for-lossless rows on fallback activation")
+                }
+            }.onFailure { Log.w("StashStartup", "waiting-for-lossless requeue migration failed", it) }
+        }
         // (The lossless prefetch cache now prunes itself on insert — see
         // LosslessUrlPrefetcher.warmUp. It used to be swept by a 60s loop
         // launched here, which woke for the entire life of the process to
@@ -558,6 +570,7 @@ class StashApplication : Application(), Configuration.Provider {
             // heaviest thing a cold start does, and downloads still freshen it themselves.
             if (!saverAtStart && connectivityMonitor.isConnected()) {
                 ytDlpManager.ensureFreshened()
+                ytDlpManager.warmUp()
             }
         }
         // Warm up music.youtube.com TLS + DNS in the first 2s of launch so

@@ -170,7 +170,7 @@ data class SettingsUiState(
      * source resolves it; when true, yt-dlp picks it up at
      * [audioQuality]. Only meaningful while [losslessEnabled] is true.
      */
-    val youtubeFallbackEnabled: Boolean = false,
+    val youtubeFallbackEnabled: Boolean = true,
     /**
      * True when at least one crash report exists in `cacheDir/crashes/`.
      * Drives the enabled state of the "Share latest crash report" button
