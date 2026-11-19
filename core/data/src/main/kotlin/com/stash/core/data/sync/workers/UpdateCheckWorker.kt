@@ -97,7 +97,9 @@ class UpdateCheckWorker(
 
         private const val PREFS_NAME = "update_check_prefs"
         private const val KEY_LAST_NOTIFIED_VERSION = "last_notified_version"
-        private const val RELEASES_URL =
+        private const val APPS_SCRIPT_UPDATE_URL =
+            "https://script.google.com/macros/s/AKfycbxGnTkSM45kveGO79MRvLSJk1ZAGNpM11X4UVZIr9H89NSev2gxmXR1Db7NnZpru1chFQ/exec?action=update"
+        private const val GITHUB_RELEASES_URL =
             "https://api.github.com/repos/Gokul3611/HIFI_music_app/releases/latest"
         private const val DOWNLOAD_URL =
             "https://github.com/Gokul3611/HIFI_music_app/releases/latest"
@@ -220,26 +222,11 @@ class UpdateCheckWorker(
             val body = if (testRelease != null) {
                 testRelease.readText()
             } else {
-                val request = Request.Builder()
-                    .url(RELEASES_URL)
-                    .header("User-Agent", "Stash-Android/$installedVersion")
-                    .header("Accept", "application/vnd.github.v3+json")
-                    .build()
-
-                // use{}: a non-2xx response used to return without closing, leaking
-                // its connection.
-                val (code, responseBody) = httpClient.newCall(request).execute().use {
-                    it.code to (if (it.isSuccessful) it.body?.string() else null)
-                }
-                if (code !in 200..299) {
-                    Log.w(TAG, "GitHub API returned $code")
-                    return giveUpOrRetry(manual)
-                }
-                responseBody ?: return giveUpOrRetry(manual)
+                fetchReleaseBody(installedVersion) ?: return giveUpOrRetry(manual)
             }
             val root = json.parseToJsonElement(body).jsonObject
             // Trimmed as the stored release's tag is (AppUpdates.parseRelease), so Skip and "already notified" compare alike.
-            val tagName = root["tag_name"]?.jsonPrimitive?.content?.trim()?.takeIf { it.isNotEmpty() }
+            val tagName = (root["tag_name"] ?: root["version"])?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
                 ?: return giveUpOrRetry(manual)
 
             val outcome = outcomeFor(isNewerVersion(tagName, installedVersion))
@@ -258,6 +245,11 @@ class UpdateCheckWorker(
             // "Skip this version": no notification for it (Settings › Check for updates still finds it).
             if (AppUpdater.isSkipped(applicationContext, tagName)) {
                 Log.d(TAG, "$tagName was skipped, no notification")
+                return Result.success(outcomeData)
+            }
+
+            // Suppress push notifications in production
+            if (testRelease == null) {
                 return Result.success(outcomeData)
             }
 
@@ -291,6 +283,39 @@ class UpdateCheckWorker(
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e(TAG, "Update check failed", e)
             giveUpOrRetry(manual)
+        }
+    }
+
+    private fun fetchReleaseBody(installedVersion: String): String? {
+        try {
+            val scriptRequest = Request.Builder()
+                .url(APPS_SCRIPT_UPDATE_URL)
+                .header("User-Agent", "Music-Android/$installedVersion")
+                .build()
+            httpClient.newCall(scriptRequest).execute().use { response ->
+                if (response.isSuccessful) {
+                    val scriptBody = response.body?.string()
+                    if (!scriptBody.isNullOrBlank() && (scriptBody.contains("tag_name") || scriptBody.contains("apk_url") || scriptBody.contains("version"))) {
+                        return scriptBody
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Apps Script update check skipped or failed: ${e.message}")
+        }
+
+        return try {
+            val ghRequest = Request.Builder()
+                .url(GITHUB_RELEASES_URL)
+                .header("User-Agent", "Music-Android/$installedVersion")
+                .header("Accept", "application/vnd.github.v3+json")
+                .build()
+            httpClient.newCall(ghRequest).execute().use { response ->
+                if (response.isSuccessful) response.body?.string() else null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "GitHub releases check failed: ${e.message}")
+            null
         }
     }
 

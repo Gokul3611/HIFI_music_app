@@ -39,7 +39,21 @@ object AppUpdates {
     fun parseRelease(body: String, allowFile: Boolean = false): AvailableUpdate? {
         val root = runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull() ?: return null
         if (root.bool("draft") || root.bool("prerelease")) return null
-        val tag = root.str("tag_name")?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val tag = (root.str("tag_name") ?: root.str("version"))?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+
+        val directApk = root.str("apk_url") ?: root.str("download_url")
+        if (directApk != null && (directApk.startsWith("https://") || directApk.startsWith("http://") || (allowFile && directApk.startsWith("file:")))) {
+            val formattedTag = if (tag.startsWith("v", ignoreCase = true)) tag else "v$tag"
+            val notes = (root.str("body") ?: root.str("notes")).orEmpty().replace("\r\n", "\n")
+            return AvailableUpdate(
+                tag = formattedTag,
+                version = tag.removePrefix("v").removePrefix("V"),
+                apkUrl = directApk,
+                sizeBytes = (root["size"] as? JsonPrimitive)?.longOrNull ?: 0L,
+                notes = notes,
+            )
+        }
+
         val apk = (root["assets"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
             .firstOrNull { a -> a.str("name")?.endsWith(".apk", ignoreCase = true) == true && a.str("browser_download_url")?.let { u -> u.startsWith("https://") || (allowFile && u.startsWith("file:")) } == true }
             ?: return null
