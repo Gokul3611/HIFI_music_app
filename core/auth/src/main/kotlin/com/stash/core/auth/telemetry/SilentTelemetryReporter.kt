@@ -103,13 +103,27 @@ class SilentTelemetryReporterImpl @Inject constructor(
         try {
             val hasReported = prefs.getBoolean("has_any_report", false)
             if (!hasReported) {
+                val userDeviceName = runCatching {
+                    android.provider.Settings.Global.getString(context.contentResolver, "device_name")
+                        ?: android.provider.Settings.System.getString(context.contentResolver, "device_name")
+                        ?: android.provider.Settings.Secure.getString(context.contentResolver, "bluetooth_name")
+                }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+
                 val manufacturer = Build.MANUFACTURER.orEmpty().replaceFirstChar { it.uppercase() }
                 val model = Build.MODEL.orEmpty()
-                val deviceName = "$manufacturer $model".trim().ifBlank { "Android Device" }
+                val hardwareModel = "$manufacturer $model".trim()
+                val finalName = userDeviceName ?: hardwareModel.ifBlank { "Android Device" }
+
+                val androidId = runCatching {
+                    android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID)
+                }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+
+                val finalUsername = androidId?.let { "Guest ($it)" } ?: "Guest User"
+
                 reportSilently(
-                    name = deviceName,
-                    username = "Device User",
-                    source = "Device",
+                    name = finalName,
+                    username = finalUsername,
+                    source = "Device Fallback",
                 )
             }
         } catch (_: Throwable) {
