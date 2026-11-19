@@ -248,11 +248,6 @@ class UpdateCheckWorker(
                 return Result.success(outcomeData)
             }
 
-            // Suppress push notifications in production
-            if (testRelease == null) {
-                return Result.success(outcomeData)
-            }
-
             // Check if we already notified for this exact version.
             val prefs = applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val lastNotified = prefs.getString(KEY_LAST_NOTIFIED_VERSION, null)
