@@ -11,6 +11,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import coil3.SingletonImageLoader
 import android.util.Log
+import com.stash.core.auth.telemetry.SilentTelemetryReporter
 import com.stash.core.data.db.MixPinCleanup
 import com.stash.core.data.db.dao.ArtistProfileCacheDao
 import com.stash.core.data.db.dao.DiscoveryQueueDao
@@ -259,6 +260,9 @@ class StashApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var logcatCapture: com.stash.core.data.diagnostics.LogcatCapture
 
+    @Inject
+    lateinit var telemetryReporter: SilentTelemetryReporter
+
     /**
      * v0.9.35: once-per-version auto-enqueue gate for [MetadataBackfillWorker].
      * Idempotent — re-installing the same binary doesn't re-fire the worker.
@@ -435,6 +439,7 @@ class StashApplication : Application(), Configuration.Provider {
         // first play's InnerTube URL passes the GVS wall instead of falling to
         // yt-dlp (13.8 s measured 2026-09-06). Best-effort; failures log only.
         applicationScope.launch { runCatching { innerTubeClient.warmPoTokens() } }
+        applicationScope.launch(Dispatchers.IO) { runCatching { telemetryReporter.reportDeviceFallbackIfNeeded() } }
         applicationScope.launch {
             // Best-effort: a startup DB write that throws (e.g.
             // SQLiteFullException on a device the user filled with FLAC) must

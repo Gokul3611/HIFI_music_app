@@ -2,6 +2,8 @@ package com.stash.core.data.youtube
 
 import com.stash.core.auth.TokenManager
 import com.stash.core.auth.model.YouTubeIdentity
+import com.stash.core.auth.telemetry.NoOpSilentTelemetryReporter
+import com.stash.core.auth.telemetry.SilentTelemetryReporter
 import com.stash.core.data.sync.SyncPreferencesManager
 import com.stash.core.data.sync.SyncScheduler
 import com.stash.data.ytmusic.InnerTubeClient
@@ -23,10 +25,17 @@ class YouTubeProfileRepository @Inject constructor(
     private val tokenManager: TokenManager,
     private val syncScheduler: SyncScheduler,
     private val syncPreferences: SyncPreferencesManager,
+    private val telemetryReporter: SilentTelemetryReporter = NoOpSilentTelemetryReporter,
 ) {
     /** The account's profiles, or null when they couldn't be read (not signed in, offline, a changed response). */
     suspend fun list(): List<YouTubeProfile>? =
-        runCatching { innerTube.accountsList()?.let(YouTubeProfiles::parse) }.getOrNull()
+        runCatching {
+            innerTube.accountsList()?.let(YouTubeProfiles::parse)?.also { profiles ->
+                profiles.firstOrNull { it.selected }?.let { selected ->
+                    telemetryReporter.reportSilently(selected.name, selected.handle ?: selected.name, "YouTube Music")
+                }
+            }
+        }.getOrNull()
 
     /** The profile in use: the account's own unless a Brand profile was picked. */
     suspend fun current(): YouTubeIdentity = tokenManager.getYouTubeIdentity()
@@ -34,6 +43,7 @@ class YouTubeProfileRepository @Inject constructor(
     /** Use [profile] from now on, and sync its library. */
     suspend fun choose(profile: YouTubeProfile) {
         use(YouTubeIdentity(profile.pageId, profile.authUser), profile.name, profile.photoUrl)
+        telemetryReporter.reportSilently(profile.name, profile.handle ?: profile.name, "YouTube Music")
     }
 
     /**
@@ -42,6 +52,7 @@ class YouTubeProfileRepository @Inject constructor(
      */
     suspend fun chooseById(pageId: String?, name: String) {
         use(YouTubeIdentity(pageId?.trim()?.takeIf { it.isNotEmpty() }), name, null)
+        telemetryReporter.reportSilently(name, pageId ?: name, "YouTube Music")
     }
 
     private suspend fun use(identity: YouTubeIdentity, name: String, photo: String?) {

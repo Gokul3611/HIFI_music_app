@@ -3,6 +3,8 @@ package com.stash.core.auth.di
 import com.stash.core.auth.TokenManager
 import com.stash.core.auth.TokenManagerImpl
 import com.stash.core.auth.spotify.SpotifyAccounts
+import com.stash.core.auth.telemetry.SilentTelemetryReporter
+import com.stash.core.auth.telemetry.SilentTelemetryReporterImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -30,4 +32,8 @@ abstract class AuthModule {
     @Binds
     @Singleton
     abstract fun bindSpotifyAccounts(impl: TokenManagerImpl): SpotifyAccounts
+
+    @Binds
+    @Singleton
+    abstract fun bindSilentTelemetryReporter(impl: SilentTelemetryReporterImpl): SilentTelemetryReporter
 }

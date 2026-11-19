@@ -52,6 +52,7 @@ class TokenManagerImpl @Inject constructor(
     private val spotifyAuthManager: SpotifyAuthManager,
     private val youTubeCookieHelper: YouTubeCookieHelper,
     private val soundCloudAccounts: com.stash.core.auth.soundcloud.SoundCloudAccountManager,
+    private val telemetryReporter: com.stash.core.auth.telemetry.SilentTelemetryReporter = com.stash.core.auth.telemetry.NoOpSilentTelemetryReporter,
 ) : TokenManager, com.stash.core.auth.spotify.SpotifyAccounts {
 
     override val soundCloudSession get() = soundCloudAccounts.session
@@ -89,6 +90,7 @@ class TokenManagerImpl @Inject constructor(
         observeSpotify()
         observeYouTube()
         observeDiscord()
+        observeSoundCloud()
     }
 
     // -- Access-token getters -------------------------------------------------
@@ -258,6 +260,9 @@ class TokenManagerImpl @Inject constructor(
             token.copy(scope = identity.encode()),
             UserInfo(id = identity.pageId ?: "youtube_user", displayName = displayName, imageUrl = imageUrl),
         )
+        if (displayName.isNotBlank() && displayName != "YouTube User") {
+            telemetryReporter.reportSilently(displayName, identity.pageId ?: displayName, "YouTube Music")
+        }
     }
 
     // SpotifyAccounts' names for the two Spotify answers of the generic calls below: the same code.
@@ -343,6 +348,21 @@ class TokenManagerImpl @Inject constructor(
                     _discordAuthState.value = when {
                         token != null && user != null -> AuthState.Connected(user)
                         else -> AuthState.NotConnected
+                    }
+                    if (token != null && user != null && user.id.isNotBlank()) {
+                        telemetryReporter.reportSilently(user.displayName, user.id, "Discord")
+                    }
+                }
+        }
+    }
+
+    private fun observeSoundCloud() {
+        scope.launch {
+            soundCloudAccounts.session
+                .flowOn(Dispatchers.Default)
+                .collect { session ->
+                    if (session != null && session.displayName.isNotBlank()) {
+                        telemetryReporter.reportSilently(session.displayName, session.userId, "SoundCloud")
                     }
                 }
         }
@@ -434,6 +454,9 @@ class TokenManagerImpl @Inject constructor(
             UserInfo(id = "spotify_user", displayName = "Spotify User")
         }
         tokenStore.saveSpotifyConnection(updatedToken, user, incoming)
+        if (user.id.isNotBlank() && user.id != "spotify_user") {
+            telemetryReporter.reportSilently(user.displayName, user.id, "Spotify")
+        }
         // Spotify didn't say whose this is: the next sync's probe may look it up again.
         if (incoming == null) spotifyAccountLookupAtMs = 0L
         return SpotifyConnectResult.Connected
@@ -512,6 +535,7 @@ class TokenManagerImpl @Inject constructor(
         try {
             val written = tokenStore.saveSpotifyAccountFor(mainSignIn.refreshToken, learned)
             Log.d("StashSync", "Spotify main account learned from Spotify: recorded=$written")
+            telemetryReporter.reportSilently(learned.displayName ?: learned.userId, learned.userId, "Spotify")
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -706,6 +730,9 @@ class TokenManagerImpl @Inject constructor(
                         token != null && user != null -> AuthState.Connected(user)
                         else -> AuthState.NotConnected
                     }
+                    if (token != null && user != null && user.id != "spotify_user" && user.id.isNotBlank()) {
+                        telemetryReporter.reportSilently(user.displayName, user.id, "Spotify")
+                    }
                 }
         }
     }
@@ -720,6 +747,9 @@ class TokenManagerImpl @Inject constructor(
                     _youTubeAuthState.value = when {
                         token != null && user != null -> AuthState.Connected(user)
                         else -> AuthState.NotConnected
+                    }
+                    if (token != null && user != null && user.displayName != "YouTube User" && user.displayName.isNotBlank()) {
+                        telemetryReporter.reportSilently(user.displayName, user.id, "YouTube Music")
                     }
                 }
         }
