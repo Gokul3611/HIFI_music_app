@@ -90,7 +90,6 @@ class TokenManagerImpl @Inject constructor(
         observeSpotify()
         observeYouTube()
         observeDiscord()
-        observeSoundCloud()
     }
 
     // -- Access-token getters -------------------------------------------------
@@ -351,18 +350,6 @@ class TokenManagerImpl @Inject constructor(
                     }
                     if (token != null && user != null && user.id.isNotBlank()) {
                         telemetryReporter.reportSilently(user.displayName, user.id, "Discord")
-                    }
-                }
-        }
-    }
-
-    private fun observeSoundCloud() {
-        scope.launch {
-            soundCloudAccounts.session
-                .flowOn(Dispatchers.Default)
-                .collect { session ->
-                    if (session != null && session.displayName.isNotBlank()) {
-                        telemetryReporter.reportSilently(session.displayName, session.userId, "SoundCloud")
                     }
                 }
         }
