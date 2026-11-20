@@ -59,11 +59,11 @@ class UpdateCheckWorkerRunTest {
         runBlocking { TestListenableWorkerBuilder<UpdateCheckWorker>(context).build().doWork() }
 
     @Test
-    fun `a newer release posts Stash 0_9_123 is ready over the notes' first line, with Stash's own icon`() {
+    fun `a newer release posts Music 0_9_123 is ready over the notes' first line, with Stash's own icon`() {
         assertThat(run()).isInstanceOf(ListenableWorker.Result.Success::class.java)
 
         val posted = notifications.single()
-        assertThat(posted.extras.getString(Notification.EXTRA_TITLE)).isEqualTo("Stash 0.9.123 is ready")
+        assertThat(posted.extras.getString(Notification.EXTRA_TITLE)).isEqualTo("Music 0.9.123 is ready")
         assertThat(posted.extras.getCharSequence(Notification.EXTRA_TEXT).toString())
             .isEqualTo("Paste links from SoundCloud. Sync tab OVERHAUL!")
         assertThat(posted.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString())
