@@ -152,25 +152,26 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/master') || startsWith(github.ref, 'refs/heads/main')
         with:
-          tag_name: v0.9.131
-          name: "Music Hi-Fi v0.9.131"
+          tag_name: v0.9.132
+          name: "Music Hi-Fi v0.9.132"
           body: |
             <!-- stash-app
             Official update from Gokul (Developer). Safe to install!
             - Verified Official Update | Upstream Stash updates are blocked; this is our official verified update, safe to install.
+            - Correct Branding & Repos | Updated all About links to official Gokul3611 repository and rebranded updater strings to Music.
             - Seamless Music Downloads | Active automatic fallbacks prevent downloads from hanging or failing when Tidal relays are busy.
             - ESP32 Hi-Fi DAC Streaming | Rate-aware APLL clock switching (44.1 kHz - 192 kHz) and exclusive streaming.
             -->
-            ### 🎵 Music Hi-Fi v0.9.131 - Official Verified Update
+            ### 🎵 Music Hi-Fi v0.9.132 - Official Verified Update
 
             > **📢 Notice from Gokul:** This is an official, verified update from our repository. Upstream Stash updates have been blocked to prevent overwriting your installation and data. You can safely install this update directly!
 
             #### 🌟 Highlights & What's New:
             - **Verified Official Release**: Safe to update directly from the app.
+            - **Repository Links & Branding Fixed**: Updated About page repository links to `https://github.com/Gokul3611/HIFI_music_app` and rebranded update prompts to Music.
+            - **Immediate Cold-Start Check**: Update checks now run unconstrained at startup so available updates surface immediately.
             - **Seamless Music Downloads**: Automatic fallback to YouTube/JioSaavn when Tidal is busy. Instant retry when tapping download.
             - **Dynamic Rate-Aware ESP32 DAC Streaming**: Automatically negotiates and switches ESP32 I2S hardware APLL clock on-the-fly (44.1 kHz - 192 kHz) via UDP handshake.
-            - **Single-Stream Exclusive Audio**: Automatically holds crossfade when streaming to external ESP32 DAC.
-            - **Continuous Radio & Upstream Hardening**: Seamless autoplay transitions and byte-exact playback stability.
 
             #### 📦 Download:
             Download `Music.apk` below or tap "Update now" inside the app.

@@ -715,7 +715,8 @@ class StashApplication : Application(), Configuration.Provider {
         // next launch — the 24-hour periodic worker alone can leave users
         // waiting up to 48 hours when Android Doze defers the fire. Not under Battery Saver: the
         // periodic check still runs, when Android lets it.
-        if (!saverAtStart) UpdateCheckWorker.enqueueOneTimeCheck(this)
+        // Uses manual = true so it runs unconstrained immediately on launch.
+        if (!saverAtStart) UpdateCheckWorker.enqueueOneTimeCheck(this, manual = true)
         applicationScope.launch { maybeInvalidateArtistCache() }
         // The pin backfill reads sync_enabled as intent. It leaves mixes alone,
         // so it can't race the mix-pin cleanup below.

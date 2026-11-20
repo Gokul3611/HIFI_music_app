@@ -45,9 +45,9 @@
     <string name="settings_about_section">About</string>
     <string name="settings_update_on_latest">You\'re on the latest version (%1$s)</string>
     <string name="settings_update_available">Update available: %1$s</string>
-    <!-- The update sheet (UpdateSheet.kt). Header: "Update available", "Stash 0.9.123", "You have 0.9.122 · 174 MB". -->
+    <!-- The update sheet (UpdateSheet.kt). Header: "Update available", "Music 0.9.123", "You have 0.9.122 · 174 MB". -->
     <string name="update_sheet_eyebrow">Update available</string>
-    <string name="update_sheet_title">Stash %1$s</string>
+    <string name="update_sheet_title">Music %1$s</string>
     <string name="update_sheet_you_have">You have %1$s</string>
     <!-- Under the highlights: what else is in the notes, e.g. "+4 new · 4 improvements · 10 fixes", opening them all. -->
     <string name="update_sheet_more_new">+%1$d new</string>
@@ -70,7 +70,7 @@
     <string name="update_sheet_downloading_pct">Downloading… %1$d%%</string>
     <!-- "82 of 174 MB": the megabytes downloaded so far, then the whole size. -->
     <string name="update_sheet_progress">%1$d of %2$s</string>
-    <string name="update_sheet_downloading_note">You can keep using Stash. The update installs when the download is done.</string>
+    <string name="update_sheet_downloading_note">You can keep using Music. The update installs when the download is done.</string>
     <string name="update_sheet_installing">Almost done. If Android asks, tap Update.</string>
     <string name="update_sheet_ready">Downloaded and checked. Tap Install now, then Update when Android asks.</string>
     <string name="update_sheet_install_now">Install now</string>
@@ -81,7 +81,7 @@
     <string name="update_sheet_open_settings">Open settings</string>
     <string name="update_sheet_try_again">Try again</string>
     <string name="update_sheet_github">Download from GitHub</string>
-    <string name="update_failed_not_an_update">This download isn\'t a Stash update, so nothing was installed.</string>
+    <string name="update_failed_not_an_update">This download isn\'t a Music update, so nothing was installed.</string>
     <string name="update_failed_already_newer">You already have this version or a newer one.</string>
     <string name="update_failed_download">The download stopped. Check your connection and try again.</string>
     <string name="update_failed_install">Android couldn\'t install the update. Try again, or download it from GitHub.</string>
@@ -142,8 +142,8 @@
     <string name="settings_support_donate_again">Donate again</string>
     <!-- Settings › About: the GitHub star row (the Support card also has a small "Star" button, and TalkBack reads
          this title for it). -->
-    <string name="settings_about_star">Star Stash on GitHub</string>
-    <string name="settings_about_star_detail">github.com/rawnaldclark/Stash</string>
+    <string name="settings_about_star">Star Music on GitHub</string>
+    <string name="settings_about_star_detail">github.com/Gokul3611/HIFI_music_app</string>
 
     <!-- Settings > Accounts & Sync -->
     <string name="settings_accounts_connections_section">Connections</string>
