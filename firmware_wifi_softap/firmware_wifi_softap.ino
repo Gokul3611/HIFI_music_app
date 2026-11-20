@@ -17,6 +17,7 @@
 
 #include <WiFi.h>
 #include <WiFiUdp.h>
+#include <ESPmDNS.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -145,6 +146,8 @@ static esp_err_t installI2SHardware(uint8_t mode, uint32_t sample_rate) {
     if (error != ESP_OK) return error;
 
     if (mode == MODE_EXTERNAL_PCM5102A) {
+        // Explicitly release GPIO 25/26 from the internal DAC analog matrix
+        i2s_set_dac_mode(I2S_DAC_CHANNEL_DISABLE);
         i2s_pin_config_t pin_config = {};
         pin_config.bck_io_num = I2S_BCK_PIN;
         pin_config.ws_io_num = I2S_WS_PIN;
@@ -156,26 +159,19 @@ static esp_err_t installI2SHardware(uint8_t mode, uint32_t sample_rate) {
     }
 
     if (error == ESP_OK) error = i2s_zero_dma_buffer(I2S_PORT);
-    if (error != ESP_OK) i2s_driver_uninstall(I2S_PORT);
+    if (error != ESP_OK) {
+        i2s_set_dac_mode(I2S_DAC_CHANNEL_DISABLE);
+        i2s_driver_uninstall(I2S_PORT);
+    }
     return error;
 }
 
-static uint8_t getActiveMode() {
-    if (s_i2s_mutex == nullptr || xSemaphoreTake(s_i2s_mutex, portMAX_DELAY) != pdTRUE) {
-        return s_active_mode;
-    }
-    uint8_t mode = s_active_mode;
-    xSemaphoreGive(s_i2s_mutex);
-    return mode;
+static inline uint8_t getActiveMode() {
+    return __atomic_load_n(&s_active_mode, __ATOMIC_ACQUIRE);
 }
 
-static uint32_t getActiveSampleRate() {
-    if (s_i2s_mutex == nullptr || xSemaphoreTake(s_i2s_mutex, portMAX_DELAY) != pdTRUE) {
-        return s_active_sample_rate;
-    }
-    uint32_t sample_rate = s_active_sample_rate;
-    xSemaphoreGive(s_i2s_mutex);
-    return sample_rate;
+static inline uint32_t getActiveSampleRate() {
+    return __atomic_load_n(&s_active_sample_rate, __ATOMIC_ACQUIRE);
 }
 
 static bool configureI2SHardware(uint8_t new_mode, uint32_t new_sample_rate) {
@@ -187,6 +183,7 @@ static bool configureI2SHardware(uint8_t new_mode, uint32_t new_sample_rate) {
     uint32_t previous_sample_rate = s_active_sample_rate;
     if (s_i2s_initialized) {
         i2s_zero_dma_buffer(I2S_PORT);
+        i2s_set_dac_mode(I2S_DAC_CHANNEL_DISABLE);
         esp_err_t uninstall_error = i2s_driver_uninstall(I2S_PORT);
         if (uninstall_error != ESP_OK) {
             xSemaphoreGive(s_i2s_mutex);
@@ -198,8 +195,8 @@ static bool configureI2SHardware(uint8_t new_mode, uint32_t new_sample_rate) {
 
     esp_err_t error = installI2SHardware(new_mode, new_sample_rate);
     if (error == ESP_OK) {
-        s_active_mode = new_mode;
-        s_active_sample_rate = new_sample_rate;
+        __atomic_store_n(&s_active_mode, new_mode, __ATOMIC_RELEASE);
+        __atomic_store_n(&s_active_sample_rate, new_sample_rate, __ATOMIC_RELEASE);
         s_i2s_initialized = true;
         rb_reset();
         xSemaphoreGive(s_i2s_mutex);
@@ -424,6 +421,12 @@ void setup() {
             static_cast<unsigned int>(CONTROL_UDP_PORT));
     }
 
+    // Start mDNS responder so the app can always resolve music-dac.local
+    if (MDNS.begin("music-dac")) {
+        MDNS.addService("audio-hifi", "tcp", TCP_PORT);
+        Serial.println("[mDNS] Responder active at music-dac.local");
+    }
+
     server.begin();
     server.setNoDelay(true);
     Serial.printf("[Server] TCP Audio Server listening on port %d...\n", TCP_PORT);
@@ -451,27 +454,7 @@ void loop() {
 
             int available = client.available();
             if (available > 0) {
-                // Check if this is an 8-byte control packet: 'H','I','F','I', mode, 0, 0, 0
-                if (available >= 8 && client.peek() == 'H' && rb_available_write() >= 8) {
-                    uint8_t ctrl[8];
-                    int n = client.readBytes((char*)ctrl, 8);
-                    bool valid_control = n == 8 && ctrl[0] == 'H' && ctrl[1] == 'I' &&
-                        ctrl[2] == 'F' && ctrl[3] == 'I' &&
-                        (ctrl[4] == MODE_EXTERNAL_PCM5102A || ctrl[4] == MODE_INTERNAL_ESP32_DAC) &&
-                        ctrl[5] == 0 && ctrl[6] == 0 && ctrl[7] == 0;
-                    if (valid_control) {
-                        uint8_t new_mode = ctrl[4];
-                        if (new_mode != getActiveMode()) {
-                            configureI2SHardware(new_mode, getActiveSampleRate());
-                        }
-                        continue;
-                    } else if (n > 0) {
-                        if (rb_write(ctrl, n)) totalBytes += n;
-                        continue;
-                    }
-                }
-
-                // Read incoming audio chunks into pre-allocated buffer
+                // Read incoming pure PCM audio chunks directly into pre-allocated buffer
                 int toRead = min(available, (int)sizeof(s_rx_buf));
                 size_t freeSpace = rb_available_write();
                 toRead = min(toRead, (int)freeSpace);
@@ -492,8 +475,8 @@ void loop() {
                 if (totalBytes > 0) {
                     Serial.printf("[Stream] Active | Mode: %s | Total: %u KB | Buffer fill: %u%%\n",
                         getActiveMode() == MODE_EXTERNAL_PCM5102A ? "PCM5102A (24/96)" : "Internal DAC",
-                        totalBytes / 1024,
-                        (rb_available_read() * 100) / RING_BUFFER_SIZE
+                        static_cast<unsigned int>(totalBytes / 1024),
+                        static_cast<unsigned int>((rb_available_read() * 100) / RING_BUFFER_SIZE)
                     );
                 }
                 lastStat = millis();
