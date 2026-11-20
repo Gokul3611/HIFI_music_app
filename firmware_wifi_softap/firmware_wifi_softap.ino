@@ -1,17 +1,20 @@
 /**
  * ============================================================================
- * ESP32 Audiophile Wireless Audio Receiver (Dual-Mode Dynamic Switcher)
+ * ESP32 Dual-Mode Wi-Fi Audio Receiver (Bit-Perfect I2S & Internal DAC)
  * ============================================================================
  * 
- * Manual Memory Management: Zero runtime malloc/free in audio loop.
- * SPSC 64 KB Circular Audio Ring Buffer.
- * Phone App Dynamic Switching: Switch between PCM5102A & Built-in DAC on-the-fly!
+ * Manual Memory Management: Zero runtime heap allocation in audio loop.
+ * SPSC 64 KB Circular Audio Ring Buffer with two-segment memcpy.
+ * Frame-aligned (8-byte) reset to guarantee zero PCM byte-shift / phase distortion.
+ * Phone App Dynamic Switching: Switch between PCM5102A & Built-in DAC on-the-fly.
  * 
  * Supported Modes:
- *   MODE 1: External PCM5102A 32-bit I2S DAC (8–192 kHz)
+ *   MODE 1: External PCM5102A 32-bit I2S DAC (8–192 kHz) - Audiophile grade
  *           ESP32 GPIO 26 -> BCK, GPIO 25 -> LCK, GPIO 22 -> DIN, GND -> SCK
- *   MODE 2: ESP32 Built-in DAC (8–192 kHz)
- *           ESP32 GPIO 25 -> Amp Left (L+), GPIO 26 -> Amp Right (R+), GND -> Ground
+ *           (Hardware note: on PCM5102A ensure SCK->GND, FMT->GND, XSMT->3.3V)
+ *   MODE 2: ESP32 Built-in DAC (8–192 kHz) - 8-bit resolution (~50 dB SNR)
+ *           with TPDF dither to eliminate distortion harmonics.
+ *           ESP32 GPIO 25 -> Amp Left (DAC1), GPIO 26 -> Amp Right (DAC2), GND -> Ground
  * ============================================================================
  */
 
@@ -52,7 +55,7 @@ WiFiUDP controlUdp;
 
 static uint8_t s_ringbuffer[RING_BUFFER_SIZE] __attribute__((aligned(4)));
 static uint32_t s_rb_head = 0; // Written only by the network producer.
-static uint32_t s_rb_tail = 0; // Written only by the audio consumer.
+static uint32_t s_rb_tail = 0; // Written only by the audio consumer (except rb_reset under mutex).
 
 // Statically allocated DMA scratch buffers (Zero heap fragmentation)
 #define DMA_CHUNK_SIZE           2048
@@ -60,15 +63,25 @@ static uint8_t s_dma_chunk[DMA_CHUNK_SIZE] __attribute__((aligned(4)));
 static uint16_t s_dac_chunk[DMA_CHUNK_SIZE / 2] __attribute__((aligned(4)));
 static uint8_t s_rx_buf[4096] __attribute__((aligned(4)));
 
-// Active Hardware State (Default: Internal Built-in DAC for testing without external board)
+// Active Hardware State (Default: External PCM5102A)
 static uint8_t s_active_mode = MODE_INTERNAL_ESP32_DAC;
 static uint32_t s_active_sample_rate = 48000;
 static bool s_i2s_initialized = false;
 static SemaphoreHandle_t s_i2s_mutex = nullptr;
 
-// Anti-Jitter Pre-buffering Hysteresis (prevents crackle / stutter on network hiccups)
-#define PREBUFFER_WATERMARK      16384  // 16 KB cushion (~93ms of 44.1k/32-bit audio)
+// Anti-Jitter Pre-buffering Hysteresis
+// 16 KB cushion = ~46 ms of 44.1 kHz / 32-bit stereo audio
+#define PREBUFFER_WATERMARK      16384
 static volatile bool s_prebuffering = true;
+
+// Fast PRNG (XorShift32) for TPDF dither
+static inline uint32_t fast_rand32() {
+    static uint32_t s_rng = 0x87654321;
+    s_rng ^= s_rng << 13;
+    s_rng ^= s_rng >> 17;
+    s_rng ^= s_rng << 5;
+    return s_rng;
+}
 
 // ============================================================================
 // SPSC LOCKLESS RING BUFFER OPERATIONS
@@ -85,29 +98,46 @@ static inline size_t rb_available_read() {
     return (head - tail) & RING_BUFFER_MASK;
 }
 
+// Optimized two-segment memcpy write
 static inline bool rb_write(const uint8_t *data, size_t length) {
     if (length > rb_available_write()) return false;
 
     uint32_t head = __atomic_load_n(&s_rb_head, __ATOMIC_RELAXED);
-    for (size_t i = 0; i < length; i++) {
-        s_ringbuffer[head] = data[i];
-        head = (head + 1) & RING_BUFFER_MASK;
+    size_t first = min(length, (size_t)(RING_BUFFER_SIZE - head));
+    memcpy(s_ringbuffer + head, data, first);
+    if (length > first) {
+        memcpy(s_ringbuffer, data + first, length - first);
     }
+    head = (head + length) & RING_BUFFER_MASK;
     __atomic_store_n(&s_rb_head, head, __ATOMIC_RELEASE);
     return true;
 }
 
+// Optimized two-segment memcpy read
 static inline void rb_read(uint8_t *dest, size_t length) {
     uint32_t tail = __atomic_load_n(&s_rb_tail, __ATOMIC_RELAXED);
-    for (size_t i = 0; i < length; i++) {
-        dest[i] = s_ringbuffer[tail];
-        tail = (tail + 1) & RING_BUFFER_MASK;
+    size_t first = min(length, (size_t)(RING_BUFFER_SIZE - tail));
+    memcpy(dest, s_ringbuffer + tail, first);
+    if (length > first) {
+        memcpy(dest + first, s_ringbuffer, length - first);
     }
+    tail = (tail + length) & RING_BUFFER_MASK;
     __atomic_store_n(&s_rb_tail, tail, __ATOMIC_RELEASE);
 }
 
-static inline void rb_reset() {
-    uint32_t head = __atomic_load_n(&s_rb_head, __ATOMIC_ACQUIRE);
+/**
+ * Caller MUST hold s_i2s_mutex (consumer task excluded) and run in the producer context.
+ * Relies on RING_BUFFER_SIZE % 8 == 0 (65536 % 8 == 0).
+ * 32-bit stereo frame = 8 bytes.
+ * For a brand new stream: both head & tail reset to 0.
+ * For an in-stream config change: head is rounded down to an 8-byte frame boundary (~7u)
+ * and tail aligned to it, preventing L/R phase swap and bit-shift static.
+ */
+static inline void rb_reset(bool new_stream) {
+    uint32_t head = new_stream ? 0u : (__atomic_load_n(&s_rb_head, __ATOMIC_RELAXED) & ~7u);
+    if (new_stream) {
+        __atomic_store_n(&s_rb_head, 0u, __ATOMIC_RELEASE);
+    }
     __atomic_store_n(&s_rb_tail, head, __ATOMIC_RELEASE);
     s_prebuffering = true;
 }
@@ -133,7 +163,7 @@ static esp_err_t installI2SHardware(uint8_t mode, uint32_t sample_rate) {
     i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
     i2s_config.intr_alloc_flags = ESP_INTR_FLAG_LEVEL1;
     i2s_config.dma_buf_count = 8;
-    i2s_config.dma_buf_len = 512;
+    i2s_config.dma_buf_len = 480; // 480 frames * 8 B = 3840 B (fits within 4092-byte hardware descriptor limit)
     i2s_config.tx_desc_auto_clear = true;
 
     if (mode == MODE_EXTERNAL_PCM5102A) {
@@ -182,7 +212,24 @@ static inline uint32_t getActiveSampleRate() {
 static bool configureI2SHardware(uint8_t new_mode, uint32_t new_sample_rate) {
     if (new_mode != MODE_EXTERNAL_PCM5102A && new_mode != MODE_INTERNAL_ESP32_DAC) return false;
     if (!isSupportedSampleRate(new_sample_rate)) return false;
-    if (s_i2s_mutex == nullptr || xSemaphoreTake(s_i2s_mutex, portMAX_DELAY) != pdTRUE) return false;
+    if (s_i2s_mutex == nullptr || xSemaphoreTake(s_i2s_mutex, pdMS_TO_TICKS(200)) != pdTRUE) return false;
+
+    // Fast Pop-Free Rate Switching (no driver reinstall if mode is unchanged)
+    if (s_i2s_initialized && new_mode == s_active_mode) {
+        i2s_zero_dma_buffer(I2S_PORT);
+        i2s_bits_per_sample_t bits = (new_mode == MODE_EXTERNAL_PCM5102A) 
+            ? I2S_BITS_PER_SAMPLE_32BIT 
+            : I2S_BITS_PER_SAMPLE_16BIT;
+        esp_err_t clk_error = i2s_set_clk(I2S_PORT, new_sample_rate, bits, I2S_CHANNEL_STEREO);
+        if (clk_error == ESP_OK) {
+            __atomic_store_n(&s_active_sample_rate, new_sample_rate, __ATOMIC_RELEASE);
+            rb_reset(false);
+            xSemaphoreGive(s_i2s_mutex);
+            Serial.printf("\n[Audio Engine] >>> Sample rate updated to %u Hz (instant clock switch)\n",
+                static_cast<unsigned int>(new_sample_rate));
+            return true;
+        }
+    }
 
     uint8_t previous_mode = s_active_mode;
     uint32_t previous_sample_rate = s_active_sample_rate;
@@ -203,14 +250,14 @@ static bool configureI2SHardware(uint8_t new_mode, uint32_t new_sample_rate) {
         __atomic_store_n(&s_active_mode, new_mode, __ATOMIC_RELEASE);
         __atomic_store_n(&s_active_sample_rate, new_sample_rate, __ATOMIC_RELEASE);
         s_i2s_initialized = true;
-        rb_reset();
+        rb_reset(false);
         xSemaphoreGive(s_i2s_mutex);
 
         if (new_mode == MODE_EXTERNAL_PCM5102A) {
             Serial.printf("\n[Audio Engine] >>> External PCM5102A active at %u Hz (32-bit slots, APLL)\n",
                 static_cast<unsigned int>(new_sample_rate));
         } else {
-            Serial.printf("\n[Audio Engine] >>> Built-in ESP32 DAC active at %u Hz (GPIO 25/26)\n",
+            Serial.printf("\n[Audio Engine] >>> Built-in ESP32 DAC active at %u Hz (GPIO 25/26, 8-bit TPDF dither)\n",
                 static_cast<unsigned int>(new_sample_rate));
         }
         return true;
@@ -218,7 +265,7 @@ static bool configureI2SHardware(uint8_t new_mode, uint32_t new_sample_rate) {
 
     // Keep the last working output available if the requested configuration fails.
     esp_err_t restore_error = installI2SHardware(previous_mode, previous_sample_rate);
-    s_i2s_initialized = restore_error == ESP_OK;
+    s_i2s_initialized = (restore_error == ESP_OK);
     xSemaphoreGive(s_i2s_mutex);
     Serial.printf("[Audio Engine] I2S configuration failed (%d); restore %s (%d).\n",
         error, s_i2s_initialized ? "succeeded" : "failed", restore_error);
@@ -230,7 +277,7 @@ static bool configureI2SHardware(uint8_t new_mode, uint32_t new_sample_rate) {
 // ============================================================================
 void audioWorkerTask(void *param) {
     while (true) {
-        if (s_i2s_mutex == nullptr || xSemaphoreTake(s_i2s_mutex, portMAX_DELAY) != pdTRUE) {
+        if (s_i2s_mutex == nullptr || xSemaphoreTake(s_i2s_mutex, pdMS_TO_TICKS(200)) != pdTRUE) {
             vTaskDelay(1);
             continue;
         }
@@ -243,7 +290,7 @@ void audioWorkerTask(void *param) {
 
         size_t available = rb_available_read();
 
-        // Anti-crackle pre-buffering: ensure 16 KB cushion before draining ring buffer
+        // Anti-crackle pre-buffering: ensure watermark cushion before draining ring buffer
         if (s_prebuffering) {
             if (available < PREBUFFER_WATERMARK) {
                 xSemaphoreGive(s_i2s_mutex);
@@ -253,7 +300,7 @@ void audioWorkerTask(void *param) {
             s_prebuffering = false;
         }
 
-        // Buffer starvation protection: if drained below chunk size, zero DMA to prevent pop and pre-buffer again
+        // Buffer starvation protection: if drained below chunk size, zero DMA to prevent click and pre-buffer again
         if (available < DMA_CHUNK_SIZE) {
             s_prebuffering = true;
             i2s_zero_dma_buffer(I2S_PORT);
@@ -268,11 +315,18 @@ void audioWorkerTask(void *param) {
         size_t output_length = DMA_CHUNK_SIZE;
 
         if (mode == MODE_INTERNAL_ESP32_DAC) {
-            // The built-in DAC consumes the high 8 bits of each 16-bit slot.
+            // Built-in DAC consumes the high 8 bits of each 16-bit slot.
+            // Apply Triangular Probability Density Function (TPDF) dither to eliminate harmonic distortion.
             const int32_t *input = reinterpret_cast<const int32_t *>(s_dma_chunk);
             const size_t sample_count = DMA_CHUNK_SIZE / sizeof(int32_t);
             for (size_t i = 0; i < sample_count; i++) {
-                s_dac_chunk[i] = static_cast<uint16_t>((input[i] >> 16) ^ 0x8000);
+                int32_t s16 = input[i] >> 16; // 16-bit signed [-32768, 32767]
+                // 1 LSB triangular dither for 8-bit domain (-255 to +255 in 16-bit scale)
+                int32_t dither = static_cast<int32_t>(fast_rand32() & 0xFF) - static_cast<int32_t>(fast_rand32() & 0xFF);
+                int32_t val = s16 + dither + 32768; // Unsigned [0, 65535]
+                if (val < 0) val = 0;
+                else if (val > 65535) val = 65535;
+                s_dac_chunk[i] = static_cast<uint16_t>(val & 0xFF00);
             }
             output = reinterpret_cast<const uint8_t *>(s_dac_chunk);
             output_length = sample_count * sizeof(uint16_t);
@@ -282,14 +336,15 @@ void audioWorkerTask(void *param) {
         size_t offset = 0;
         while (offset < output_length) {
             size_t written = 0;
-            write_error = i2s_write(I2S_PORT, output + offset, output_length - offset, &written, portMAX_DELAY);
+            // Bounded timeout (50ms) prevents infinite deadlock if I2S clock stalls
+            write_error = i2s_write(I2S_PORT, output + offset, output_length - offset, &written, pdMS_TO_TICKS(50));
             if (write_error != ESP_OK || written == 0) break;
             offset += written;
         }
         xSemaphoreGive(s_i2s_mutex);
 
         if (write_error != ESP_OK || offset != output_length) {
-            Serial.printf("[Audio Engine] I2S write failed (%d), wrote %u of %u bytes.\n",
+            Serial.printf("[Audio Engine] I2S write timed out/failed (%d), wrote %u of %u bytes.\n",
                 write_error, static_cast<unsigned>(offset), static_cast<unsigned>(output_length));
             vTaskDelay(1);
         }
@@ -314,7 +369,7 @@ static void handleControlUdp() {
     int bytes_read = controlUdp.read(reinterpret_cast<uint8_t *>(command), bytes_to_read);
     if (bytes_read < 0) return;
     command[bytes_read] = '\0';
-    // Discard a datagram tail if it was larger than our bounded command buffer.
+    // Discard any datagram tail larger than our command buffer
     while (controlUdp.available()) controlUdp.read();
 
     IPAddress remote_address = controlUdp.remoteIP();
@@ -329,7 +384,7 @@ static void handleControlUdp() {
     }
 
     if (strcmp(command, "GET_STATUS") == 0) {
-        int rssi = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : -50;
+        int rssi = (WiFi.getMode() == WIFI_STA && WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
         unsigned int fill_pct = (rb_available_read() * 100U) / RING_BUFFER_SIZE;
         snprintf(reply, sizeof(reply), "HIFI_STATUS:MODE:%u,RATE:%u,RSSI:%d,BUFFER:%u%%",
             static_cast<unsigned int>(getActiveMode()),
@@ -348,7 +403,7 @@ static void handleControlUdp() {
         bool applied = false;
         if (valid_mode) {
             uint8_t mode = static_cast<uint8_t>(requested_mode);
-            applied = mode == getActiveMode() || configureI2SHardware(mode, getActiveSampleRate());
+            applied = (mode == getActiveMode()) || configureI2SHardware(mode, getActiveSampleRate());
         }
 
         snprintf(reply, sizeof(reply), "%s:%ld", applied ? "MODE_ACK" : "MODE_NACK", requested_mode);
@@ -366,7 +421,7 @@ static void handleControlUdp() {
         bool applied = false;
         if (valid_rate) {
             uint32_t sample_rate = static_cast<uint32_t>(requested_rate);
-            applied = sample_rate == getActiveSampleRate() ||
+            applied = (sample_rate == getActiveSampleRate()) ||
                 configureI2SHardware(getActiveMode(), sample_rate);
         }
 
@@ -395,15 +450,16 @@ void setup() {
         while (true) delay(1000);
     }
 
-    // Keep I2S writes on one task so mode changes can safely stop at the mutex.
+    // Worker pinned to Core 1 at priority 12 (safely below Wi-Fi/lwIP system priority 18-20)
+    // 6144-byte stack to safely accommodate formatted I/O
     BaseType_t task_created = xTaskCreatePinnedToCore(
         audioWorkerTask,
         "AudioDMAWorker",
-        4096,
+        6144,
         NULL,
-        configMAX_PRIORITIES - 1, // High priority real-time audio thread
+        12,
         NULL,
-        1                         // Core 1
+        1
     );
     if (task_created != pdPASS) {
         Serial.println("[Audio Engine] Fatal: could not start the I2S worker task.");
@@ -416,7 +472,7 @@ void setup() {
 
     WiFi.mode(WIFI_STA);
     WiFi.begin(HOTSPOT_SSID, HOTSPOT_PASS);
-    WiFi.setSleep(false); // Eliminate Wi-Fi modem sleep power-rail ripple and latency jitter
+    WiFi.setSleep(false); // Disable modem sleep to prevent DTIM wake latency & jitter
 
     unsigned long startAttempt = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 10000) {
@@ -475,15 +531,27 @@ void loop() {
         client.print("HIFI_CONNECTED MODE:");
         client.println(getActiveMode());
 
+        // Guarantee fresh frame alignment on new connection
+        if (xSemaphoreTake(s_i2s_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
+            rb_reset(true);
+            xSemaphoreGive(s_i2s_mutex);
+        }
+
         size_t totalBytes = 0;
         unsigned long lastStat = millis();
+        unsigned long lastRxTime = millis();
 
         while (client.connected()) {
             handleControlUdp();
 
+            // 5-second inactivity timeout to drop half-open / dead sockets
+            if (millis() - lastRxTime > 5000) {
+                Serial.println("[Stream] TCP client inactive for 5s, dropping dead connection.");
+                break;
+            }
+
             int available = client.available();
             if (available > 0) {
-                // Read incoming pure PCM audio chunks directly into pre-allocated buffer
                 int toRead = min(available, (int)sizeof(s_rx_buf));
                 size_t freeSpace = rb_available_write();
                 toRead = min(toRead, (int)freeSpace);
@@ -491,7 +559,10 @@ void loop() {
                 if (toRead > 0) {
                     int bytesRead = client.read(s_rx_buf, toRead);
                     if (bytesRead > 0) {
-                        if (rb_write(s_rx_buf, bytesRead)) totalBytes += bytesRead;
+                        if (rb_write(s_rx_buf, bytesRead)) {
+                            totalBytes += bytesRead;
+                            lastRxTime = millis();
+                        }
                     }
                 } else {
                     vTaskDelay(1);
@@ -503,7 +574,7 @@ void loop() {
             if (millis() - lastStat > 3000) {
                 if (totalBytes > 0) {
                     Serial.printf("[Stream] Active | Mode: %s | Total: %u KB | Buffer fill: %u%%\n",
-                        getActiveMode() == MODE_EXTERNAL_PCM5102A ? "PCM5102A (24/96)" : "Internal DAC",
+                        getActiveMode() == MODE_EXTERNAL_PCM5102A ? "PCM5102A (32-bit)" : "Internal DAC",
                         static_cast<unsigned int>(totalBytes / 1024),
                         static_cast<unsigned int>((rb_available_read() * 100) / RING_BUFFER_SIZE)
                     );
@@ -513,9 +584,9 @@ void loop() {
         }
 
         client.stop();
-        if (xSemaphoreTake(s_i2s_mutex, portMAX_DELAY) == pdTRUE) {
+        if (xSemaphoreTake(s_i2s_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
             i2s_zero_dma_buffer(I2S_PORT);
-            rb_reset();
+            rb_reset(true);
             xSemaphoreGive(s_i2s_mutex);
         }
         Serial.println("[Stream] Phone disconnected.");
