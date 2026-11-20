@@ -407,7 +407,8 @@ void audioWorkerTask(void *param) {
 
         // Dynamic I2S write timeout: at 8 kHz, 1 DMA descriptor (480 frames) takes 60ms to drain.
         // Scale timeout dynamically so low sample rates never timeout prematurely.
-        uint32_t timeout_ms = (active_rate > 0) ? max(100u, (480u * 2000u) / active_rate) : 100u;
+        uint32_t calc_ms = (active_rate > 0) ? ((480UL * 2000UL) / active_rate) : 100UL;
+        uint32_t timeout_ms = (calc_ms > 100UL) ? calc_ms : 100UL;
         TickType_t write_timeout = pdMS_TO_TICKS(timeout_ms);
 
         size_t offset = 0;
