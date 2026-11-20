@@ -3,7 +3,9 @@ package com.stash.data.download.lossless
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import io.mockk.mockk
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -34,6 +36,13 @@ class LosslessSourcePreferencesYoutubeFallbackTest {
         // `relaxed = true` (not `relaxUnitFun`) — `requeueWaitingForLossless()`
         // returns Int, not Unit, so the more permissive relaxed mode is needed.
         prefs = LosslessSourcePreferences(context, mockk(relaxed = true))
+        // The DataStore instance outlives a test (one per process): start each from clean state.
+        runBlocking { prefs.writeRawForTest { it.clear() } }
+    }
+
+    @After
+    fun tearDown() {
+        runBlocking { prefs.writeRawForTest { it.clear() } }
     }
 
     @Test
