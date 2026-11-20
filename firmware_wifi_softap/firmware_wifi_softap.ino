@@ -77,7 +77,7 @@ static uint32_t s_rb_tail = 0; // Written only by audio consumer (except rb_rese
 #define DMA_CHUNK_SIZE           2048
 static uint8_t s_dma_chunk[DMA_CHUNK_SIZE] __attribute__((aligned(4)));
 static uint16_t s_dac_chunk[DMA_CHUNK_SIZE / 2] __attribute__((aligned(4)));
-static uint8_t s_rx_buf[4096] __attribute__((aligned(4)));
+static uint8_t s_rx_buf[2048] __attribute__((aligned(4)));
 
 // Active Hardware State
 static uint8_t s_active_mode = MODE_INTERNAL_ESP32_DAC;
@@ -205,16 +205,15 @@ static bool isSupportedSampleRate(uint32_t sample_rate) {
  */
 static void outputDmaSilence(uint8_t mode) {
     if (mode == MODE_INTERNAL_ESP32_DAC) {
-        static uint16_t s_silence_dac[DMA_CHUNK_SIZE / 2];
-        static bool s_silence_init = false;
-        if (!s_silence_init) {
-            for (size_t i = 0; i < DMA_CHUNK_SIZE / 2; i++) {
-                s_silence_dac[i] = 0x8000;
-            }
-            s_silence_init = true;
+        // Output mid-scale silence on stack (zero BSS DRAM footprint)
+        uint16_t silence[64];
+        for (size_t i = 0; i < 64; i++) {
+            silence[i] = 0x8000;
         }
         size_t written = 0;
-        i2s_write(I2S_PORT, s_silence_dac, sizeof(s_silence_dac), &written, pdMS_TO_TICKS(50));
+        for (int b = 0; b < 16; b++) {
+            i2s_write(I2S_PORT, silence, sizeof(silence), &written, pdMS_TO_TICKS(10));
+        }
     } else {
         i2s_zero_dma_buffer(I2S_PORT);
     }
