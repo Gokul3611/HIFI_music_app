@@ -152,6 +152,7 @@ internal fun TrackEntity.toAutoMediaItem(
         .setMediaMetadata(
             MediaMetadata.Builder()
                 .setTitle(title)
+                .setDisplayTitle(title)
                 .setArtist(artist)
                 .setAlbumTitle(album)
                 .setArtworkUri(

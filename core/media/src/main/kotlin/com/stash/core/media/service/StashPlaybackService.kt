@@ -669,6 +669,14 @@ class StashPlaybackService : MediaLibraryService() {
 
         // Listen Together: "With Maya +2 · <artist>" while a session runs. Otherwise the stock provider.
         val baseProvider = object : androidx.media3.session.DefaultMediaNotificationProvider(this) {
+            override fun getNotificationContentTitle(metadata: MediaMetadata): CharSequence? {
+                val title = metadata.title?.takeIf { it.isNotBlank() }
+                    ?: metadata.displayTitle?.takeIf { it.isNotBlank() }
+                    ?: mediaSession?.player?.currentMediaItem?.mediaMetadata?.title?.takeIf { it.isNotBlank() }
+                    ?: mediaSession?.player?.currentMediaItem?.mediaMetadata?.displayTitle?.takeIf { it.isNotBlank() }
+                return title ?: super.getNotificationContentTitle(metadata)
+            }
+
             override fun getNotificationContentText(metadata: MediaMetadata): CharSequence? {
                 val base = super.getNotificationContentText(metadata)
                 // "On Chrome on Windows · <artist>" while a browser plays the queue (Remote v2 §6), as Listen Together's line.
@@ -678,6 +686,19 @@ class StashPlaybackService : MediaLibraryService() {
                 val together = if (listenTogetherController.active.value) togetherLine(listenTogetherController.state.value) else null
                 return listOfNotNull(together, browser, base).joinToString(" · ")
             }
+        }
+        // Ensure playback notification channel explicitly allows full lockscreen visibility
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val nm = getSystemService(android.app.NotificationManager::class.java)
+            val channelId = androidx.media3.session.DefaultMediaNotificationProvider.DEFAULT_CHANNEL_ID
+            val existing = nm?.getNotificationChannel(channelId)
+            val channel = existing ?: android.app.NotificationChannel(
+                channelId,
+                getString(androidx.media3.session.R.string.default_notification_channel_name),
+                android.app.NotificationManager.IMPORTANCE_LOW,
+            )
+            channel.lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+            nm?.createNotificationChannel(channel)
         }
         // Listen Together and casting keep the service in the foreground while paused (onUpdateNotification below), but
         // Media3's MediaNotificationManager.onNotificationUpdated, which runs when artwork finishes loading in the
@@ -698,7 +719,12 @@ class StashPlaybackService : MediaLibraryService() {
                 onNotificationChangedCallback: androidx.media3.session.MediaNotification.Provider.Callback,
             ): androidx.media3.session.MediaNotification {
                 val fromRedirect = redirectingArtwork
-                return baseProvider.createNotification(mediaSession, mediaButtonPreferences, actionFactory) { n ->
+                val mediaNotification = baseProvider.createNotification(mediaSession, mediaButtonPreferences, actionFactory) { n ->
+                    n.notification.visibility = android.app.Notification.VISIBILITY_PUBLIC
+                    val title = n.notification.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)
+                    if (n.notification.tickerText.isNullOrBlank() && !title.isNullOrBlank()) {
+                        n.notification.tickerText = title
+                    }
                     when {
                         !listenTogetherController.active.value && !isCasting -> onNotificationChangedCallback.onNotificationChanged(n)
                         fromRedirect -> Unit
@@ -708,6 +734,12 @@ class StashPlaybackService : MediaLibraryService() {
                         }
                     }
                 }
+                mediaNotification.notification.visibility = android.app.Notification.VISIBILITY_PUBLIC
+                val title = mediaNotification.notification.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)
+                if (mediaNotification.notification.tickerText.isNullOrBlank() && !title.isNullOrBlank()) {
+                    mediaNotification.notification.tickerText = title
+                }
+                return mediaNotification
             }
         })
 

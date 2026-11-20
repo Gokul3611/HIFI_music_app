@@ -3223,6 +3223,7 @@ class PlayerRepositoryImpl @Inject constructor(
                     .setMediaMetadata(
                         MediaMetadata.Builder()
                             .setTitle(track.title)
+                            .setDisplayTitle(track.title)
                             .setArtist(track.artist)
                             .setAlbumTitle(track.album)
                             .setArtworkUri(
@@ -3328,6 +3329,7 @@ class PlayerRepositoryImpl @Inject constructor(
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(track.title)
+                        .setDisplayTitle(track.title)
                         .setArtist(track.artist)
                         .setAlbumTitle(track.album)
                         .setArtworkUri(
@@ -4539,6 +4541,7 @@ class PlayerRepositoryImpl @Inject constructor(
     private fun Track.toMediaItem(): MediaItem {
         val metadata = MediaMetadata.Builder()
             .setTitle(title)
+            .setDisplayTitle(title)
             .setArtist(artist)
             .setAlbumTitle(album)
             .setArtworkUri(
