@@ -24,8 +24,8 @@
 #include "driver/i2s.h"
 
 // Wi-Fi Hotspot Credentials (matching Music App default)
-const char* HOTSPOT_SSID = "Stash-Hotspot";
-const char* HOTSPOT_PASS = "12345678";
+const char* HOTSPOT_SSID = "FBI-VAN";
+const char* HOTSPOT_PASS = "87654321";
 
 const uint16_t TCP_PORT = 8888;
 const uint16_t CONTROL_UDP_PORT = 8889;
@@ -66,6 +66,10 @@ static uint32_t s_active_sample_rate = 48000;
 static bool s_i2s_initialized = false;
 static SemaphoreHandle_t s_i2s_mutex = nullptr;
 
+// Anti-Jitter Pre-buffering Hysteresis (prevents crackle / stutter on network hiccups)
+#define PREBUFFER_WATERMARK      16384  // 16 KB cushion (~93ms of 44.1k/32-bit audio)
+static volatile bool s_prebuffering = true;
+
 // ============================================================================
 // SPSC LOCKLESS RING BUFFER OPERATIONS
 // ============================================================================
@@ -105,6 +109,7 @@ static inline void rb_read(uint8_t *dest, size_t length) {
 static inline void rb_reset() {
     uint32_t head = __atomic_load_n(&s_rb_head, __ATOMIC_ACQUIRE);
     __atomic_store_n(&s_rb_tail, head, __ATOMIC_RELEASE);
+    s_prebuffering = true;
 }
 
 // ============================================================================
@@ -230,9 +235,30 @@ void audioWorkerTask(void *param) {
             continue;
         }
 
-        if (!s_i2s_initialized || rb_available_read() < DMA_CHUNK_SIZE) {
+        if (!s_i2s_initialized) {
             xSemaphoreGive(s_i2s_mutex);
             vTaskDelay(1);
+            continue;
+        }
+
+        size_t available = rb_available_read();
+
+        // Anti-crackle pre-buffering: ensure 16 KB cushion before draining ring buffer
+        if (s_prebuffering) {
+            if (available < PREBUFFER_WATERMARK) {
+                xSemaphoreGive(s_i2s_mutex);
+                vTaskDelay(2);
+                continue;
+            }
+            s_prebuffering = false;
+        }
+
+        // Buffer starvation protection: if drained below chunk size, zero DMA to prevent pop and pre-buffer again
+        if (available < DMA_CHUNK_SIZE) {
+            s_prebuffering = true;
+            i2s_zero_dma_buffer(I2S_PORT);
+            xSemaphoreGive(s_i2s_mutex);
+            vTaskDelay(2);
             continue;
         }
 
@@ -390,6 +416,7 @@ void setup() {
 
     WiFi.mode(WIFI_STA);
     WiFi.begin(HOTSPOT_SSID, HOTSPOT_PASS);
+    WiFi.setSleep(false); // Eliminate Wi-Fi modem sleep power-rail ripple and latency jitter
 
     unsigned long startAttempt = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 10000) {
@@ -398,6 +425,7 @@ void setup() {
     }
 
     if (WiFi.status() == WL_CONNECTED) {
+        WiFi.setSleep(false);
         Serial.println("\n[Wi-Fi] Connected to Phone Hotspot successfully!");
         Serial.print("[Wi-Fi] ESP32 IP Address: ");
         Serial.println(WiFi.localIP());
@@ -409,6 +437,7 @@ void setup() {
             Serial.println("[Wi-Fi] Fatal: failed to start the standalone AP.");
             while (true) delay(1000);
         }
+        WiFi.setSleep(false);
         Serial.print("[Wi-Fi] AP Started. ESP32 IP: ");
         Serial.println(WiFi.softAPIP());
     }
