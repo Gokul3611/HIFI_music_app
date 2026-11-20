@@ -19,11 +19,19 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Configure 8GB Swap Space (Prevent OOM Killer)
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          df -h
+
+      - name: Configure Swap Space (Prevent OOM Killer)
         run: |
           sudo swapoff -a || true
           sudo rm -f /swapfile || true
-          sudo fallocate -l 8G /swapfile
+          sudo fallocate -l 4G /swapfile
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
