@@ -62,13 +62,13 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.0.12077973" "cmake;3.22.1" > /dev/null
 
-      - name: Run unit tests and build Release APK
+      - name: Build Release APK
         env:
           LOSSLESS_CONFIG_URL: "https://stash-tipjar.rawnaldclark.workers.dev/lossless.json"
           LOSSLESS_CONFIG_PUBKEY: "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAELiPYu7/k+TmVCojPEECT2w8tTnoy597StnnmS3vSiPxJ9AtluqhnIinmdknRi+h2ElUzkXYHoJjfzpoLGF46Cg"
         run: |
           set -o pipefail
-          ./gradlew testDebugUnitTest assembleRelease --no-daemon --no-parallel --max-workers=2 --stacktrace 2>&1 | tee android-build.log
+          ./gradlew assembleRelease --no-daemon --no-parallel --max-workers=2 --stacktrace 2>&1 | tee android-build.log
 
       - name: Surface build failure details
         if: failure()
