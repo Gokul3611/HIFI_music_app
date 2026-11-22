@@ -86,15 +86,5 @@ HIFI_music_app/
 
 ---
 
-## 🎯 Open Roadmap & Ideas
-
-We are actively seeking contributions in the following areas:
-- **Automatic mDNS Discovery:** Broadcast `_esp32_audio._tcp.local` from the ESP32 so the Android app automatically discovers the DAC without manual IP entry.
-- **Parametric EQ & AutoEQ Integration:** Allow importing AutoEQ frequency response corrections for specific headphone models.
-- **Lockless DSP Limiter Profiles:** Expand the C/C++ audio limiter for customizable attack, decay, and knee parameters.
-- **Desktop Companion Client:** Lightweight cross-platform desktop streamer (Electron/Tauri or Python) targeting the same ESP32 port 8888 receiver.
-
----
-
 ## ⚖️ License
 By contributing, you agree that your code will be licensed under the **GNU General Public License v3.0**.
