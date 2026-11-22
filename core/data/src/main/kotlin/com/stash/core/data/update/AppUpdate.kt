@@ -18,6 +18,8 @@ data class AvailableUpdate(
     val sizeBytes: Long,
     /** The release notes as written (GitHub's Markdown body): [ReleaseNotes.parse] reads the user's part of them. */
     val notes: String,
+    /** True when this release is marked as an emergency stability rollback by the developer. */
+    val isRollback: Boolean = false,
 ) {
     /** The release's page on GitHub, for "Full notes on GitHub" and "Download from GitHub". */
     val pageUrl: String get() = AppUpdates.releasePage(tag)
@@ -41,6 +43,7 @@ object AppUpdates {
         if (root.bool("draft") || root.bool("prerelease")) return null
         val tag = (root.str("tag_name") ?: root.str("version"))?.trim()?.takeIf { it.isNotEmpty() } ?: return null
 
+        val isRollback = root.bool("rollback") || root.bool("force") || root.bool("is_rollback")
         val directApk = root.str("apk_url") ?: root.str("download_url")
         if (directApk != null && (directApk.startsWith("https://") || directApk.startsWith("http://") || (allowFile && directApk.startsWith("file:")))) {
             val formattedTag = if (tag.startsWith("v", ignoreCase = true)) tag else "v$tag"
@@ -51,6 +54,7 @@ object AppUpdates {
                 apkUrl = directApk,
                 sizeBytes = (root["size"] as? JsonPrimitive)?.longOrNull ?: 0L,
                 notes = notes,
+                isRollback = isRollback,
             )
         }
 
@@ -63,6 +67,7 @@ object AppUpdates {
             apkUrl = apk.str("browser_download_url")!!,
             sizeBytes = (apk["size"] as? JsonPrimitive)?.longOrNull ?: 0L,
             notes = root.str("body").orEmpty().replace("\r\n", "\n"),
+            isRollback = isRollback,
         )
     }
 

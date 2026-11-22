@@ -1,16 +1,22 @@
 package com.stash.core.network.di
 
+import android.content.Context
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import dagger.multibindings.Multibinds
+import okhttp3.Cache
+import okhttp3.ConnectionPool
 import okhttp3.ConnectionSpec
+import okhttp3.Dispatcher
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
+import java.io.File
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
@@ -49,6 +55,7 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideOkHttpClient(
+        @ApplicationContext context: Context,
         appInterceptors: Set<@JvmSuppressWildcards Interceptor>,
     ): OkHttpClient {
         // BASIC prints each request URL; credential query parameters (Qobuz's
@@ -68,7 +75,25 @@ object NetworkModule {
             REDACTED_HEADERS.forEach(::redactHeader)
         }
 
+        // 50 MB response cache: saves redundant network calls for covers, metadata, and APIs
+        val cache = runCatching {
+            Cache(File(context.cacheDir, "http_cache"), 50L * 1024 * 1024)
+        }.getOrNull()
+
+        // 16 warm connections: prevents frequent TLS 1.3 renegotiations and saves battery
+        val connectionPool = ConnectionPool(16, 5, TimeUnit.MINUTES)
+
+        // Parallel dispatching: allows concurrent cover art and streaming chunks without queuing
+        val dispatcher = Dispatcher().apply {
+            maxRequests = 64
+            maxRequestsPerHost = 16
+        }
+
         return OkHttpClient.Builder()
+            .apply { cache?.let { cache(it) } }
+            .connectionPool(connectionPool)
+            .dispatcher(dispatcher)
+            .retryOnConnectionFailure(true)
             .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS))
             // Survive the device resolver failing under the sync's 8-way download
             // burst (UnknownHostException for several simultaneous lookups of the

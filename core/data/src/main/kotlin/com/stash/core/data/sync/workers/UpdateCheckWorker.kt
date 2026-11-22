@@ -229,7 +229,11 @@ class UpdateCheckWorker(
             val tagName = (root["tag_name"] ?: root["version"])?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
                 ?: return giveUpOrRetry(manual)
 
-            val outcome = outcomeFor(isNewerVersion(tagName, installedVersion))
+            val isRollback = (root["rollback"] as? JsonPrimitive)?.contentOrNull == "true" ||
+                (root["force"] as? JsonPrimitive)?.contentOrNull == "true" ||
+                (root["is_rollback"] as? JsonPrimitive)?.contentOrNull == "true"
+            val isNewer = isNewerVersion(tagName, installedVersion)
+            val outcome = outcomeFor(isNewer || isRollback)
             val outcomeData = workDataOf(KEY_OUTCOME to outcome, KEY_LATEST_TAG to tagName)
 
             if (outcome == OUTCOME_UP_TO_DATE) {
@@ -242,8 +246,9 @@ class UpdateCheckWorker(
             val update = AppUpdates.parseRelease(body, allowFile = testRelease != null)
             AppUpdater.store(applicationContext, update)
 
-            // "Skip this version": no notification for it (Settings › Check for updates still finds it).
-            if (AppUpdater.isSkipped(applicationContext, tagName)) {
+            // "Skip this version": no notification for it (Settings › Check for updates still finds it),
+            // UNLESS developer issued an emergency rollback.
+            if (!isRollback && AppUpdater.isSkipped(applicationContext, tagName)) {
                 Log.d(TAG, "$tagName was skipped, no notification")
                 return Result.success(outcomeData)
             }

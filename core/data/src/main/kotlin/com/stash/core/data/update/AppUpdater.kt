@@ -19,6 +19,7 @@ import androidx.core.content.pm.PackageInfoCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.stash.core.data.R
+import com.stash.core.data.db.StashDatabase
 import com.stash.core.data.sync.SyncNotificationManager
 import com.stash.core.data.sync.workers.UpdateCheckWorker
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -475,7 +476,10 @@ class AppUpdater internal constructor(
             Log.w(TAG, "update is ${archive.packageName}, this is ${context.packageName}")
             return UpdateState.Failed.Reason.NOT_AN_UPDATE
         }
-        if (PackageInfoCompat.getLongVersionCode(archive) <= PackageInfoCompat.getLongVersionCode(installed)) return UpdateState.Failed.Reason.ALREADY_NEWER
+        val isRollback = _available.value?.isRollback ?: false
+        if (!isRollback && PackageInfoCompat.getLongVersionCode(archive) <= PackageInfoCompat.getLongVersionCode(installed)) {
+            return UpdateState.Failed.Reason.ALREADY_NEWER
+        }
         if (signers(archive).isEmpty() || signers(archive) != signers(installed)) {
             Log.w(TAG, "update is signed with another key")
             return UpdateState.Failed.Reason.NOT_AN_UPDATE
@@ -496,8 +500,34 @@ class AppUpdater internal constructor(
         return sigs.mapTo(HashSet()) { sig -> sha.digest(sig.toByteArray()).joinToString("") { "%02x".format(it) } }
     }
 
+    /**
+     * Preserves a clean snapshot of stash.db before an APK update is staged/installed,
+     * allowing instant data restoration in case of an update regression or rollback.
+     */
+    private fun takePreUpdateSnapshot() {
+        runCatching {
+            val dbFile = context.getDatabasePath(StashDatabase.DATABASE_NAME)
+            if (!dbFile.exists()) return@runCatching
+            val backupDir = File(context.filesDir, "backups").apply { mkdirs() }
+            val snapshot = File(backupDir, "pre_update_snapshot.db")
+            val walFile = File(dbFile.path + "-wal")
+            val snapshotWal = File(snapshot.path + "-wal")
+
+            dbFile.copyTo(snapshot, overwrite = true)
+            if (walFile.exists()) {
+                walFile.copyTo(snapshotWal, overwrite = true)
+            } else if (snapshotWal.exists()) {
+                snapshotWal.delete()
+            }
+            Log.i(TAG, "Pre-update database snapshot saved to ${snapshot.absolutePath}")
+        }.onFailure { e ->
+            Log.w(TAG, "Failed to create pre-update database snapshot", e)
+        }
+    }
+
     /** Copies [apk] into a new [PackageInstaller] session, after dropping Stash's earlier ones; the session's id. */
     private fun stageSession(apk: File): Int {
+        takePreUpdateSnapshot()
         val installer = context.packageManager.packageInstaller
         // An earlier try's session (staged, its confirm never answered) would keep its copy of the APK: drop it. Each
         // dropped session that was committed answers "aborted" to its own callback.
@@ -562,7 +592,8 @@ class AppUpdater internal constructor(
         private const val KEY_LATER_TAG = "later_tag"
         private const val KEY_LATER_AT = "later_at"
         private const val KEY_SKIPPED_TAG = "skipped_tag"
-        private val RELEASE_KEYS = setOf(KEY_TAG, KEY_URL, KEY_SIZE, KEY_NOTES)
+        private const val KEY_IS_ROLLBACK = "is_rollback"
+        private val RELEASE_KEYS = setOf(KEY_TAG, KEY_URL, KEY_SIZE, KEY_NOTES, KEY_IS_ROLLBACK)
 
         fun isDebuggable(context: Context) = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
@@ -571,10 +602,13 @@ class AppUpdater internal constructor(
             val edit = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             edit.remove(KEY_NOTES_PLAIN)
             if (update == null) {
-                edit.remove(KEY_TAG).remove(KEY_URL).remove(KEY_SIZE).remove(KEY_NOTES)
+                edit.remove(KEY_TAG).remove(KEY_URL).remove(KEY_SIZE).remove(KEY_NOTES).remove(KEY_IS_ROLLBACK)
             } else {
                 // The tag last: the updater reloads on its change.
-                edit.putString(KEY_URL, update.apkUrl).putLong(KEY_SIZE, update.sizeBytes).putString(KEY_NOTES, update.notes)
+                edit.putString(KEY_URL, update.apkUrl)
+                    .putLong(KEY_SIZE, update.sizeBytes)
+                    .putString(KEY_NOTES, update.notes)
+                    .putBoolean(KEY_IS_ROLLBACK, update.isRollback)
                     .putString(KEY_TAG, update.tag)
             }
             edit.apply()
@@ -584,15 +618,23 @@ class AppUpdater internal constructor(
         fun isSkipped(context: Context, tag: String): Boolean =
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_SKIPPED_TAG, null) == tag
 
-        /** The stored release, if it is still newer than what is installed (it isn't once it has been installed). */
+        /** The stored release, if it is still newer than what is installed (or marked as an emergency rollback). */
         private fun read(prefs: SharedPreferences, context: Context): AvailableUpdate? {
             val tag = prefs.getString(KEY_TAG, null) ?: return null
             val url = prefs.getString(KEY_URL, null) ?: return null
             val installed = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
                 ?: return null
-            if (!UpdateCheckWorker.isNewerVersion(tag, installed)) return null
+            val isRollback = prefs.getBoolean(KEY_IS_ROLLBACK, false)
+            if (!isRollback && !UpdateCheckWorker.isNewerVersion(tag, installed)) return null
             val notes = prefs.getString(KEY_NOTES, null) ?: prefs.getString(KEY_NOTES_PLAIN, null).orEmpty()
-            return AvailableUpdate(tag, tag.removePrefix("v").removePrefix("V"), url, prefs.getLong(KEY_SIZE, 0L), notes)
+            return AvailableUpdate(
+                tag = tag,
+                version = tag.removePrefix("v").removePrefix("V"),
+                apkUrl = url,
+                sizeBytes = prefs.getLong(KEY_SIZE, 0L),
+                notes = notes,
+                isRollback = isRollback,
+            )
         }
     }
 }
