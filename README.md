@@ -2,12 +2,13 @@
 ## Technical Reference Manual & System Documentation
 
 ```text
-Document Version : 2.4.0-REV3
-Target Hardware  : ESP32-D0WDQ6 / ESP32-WROOM-32 + TI PCM5102A (I2S)
+Document Version : 2.5.0-REV4
+Target Hardware  : ESP32-D0WDQ6 / ESP32-WROOM-32 + TI PCM5102A (I2S) / Internal DAC
 Target Client    : Android 8.0+ (API 26–35)
-Transport Layer  : IEEE 802.11 b/g/n (TCP Socket @ Port 8888)
-Audio Encoding   : 24-bit Linear PCM / 96.0 kHz / Stereo (in 32-bit I2S subframes)
-Effective Bitrate: 3,072 kbps (Continuous Audio Stream)
+Transport Layer  : IEEE 802.11 b/g/n (TCP Socket @ Port 8888, UDP Control @ Port 8889)
+Audio Encoding   : Signed 32-bit LE Stereo PCM (S32_LE, 8 bytes per frame)
+Supported Rates  : 8.0 kHz – 192.0 kHz (Bit-Perfect Linear PCM)
+Effective Bitrate: Up to 12.3 Mbps (Continuous Uncompressed Payload)
 License          : GNU General Public License v3.0 (GPL-3.0)
 ```
 
@@ -18,19 +19,21 @@ License          : GNU General Public License v3.0 (GPL-3.0)
 1. [System Architecture](#1-system-architecture)
 2. [Hardware Specification & Pinouts](#2-hardware-specification--pinouts)
 3. [Network & Audio Transport Protocol](#3-network--audio-transport-protocol)
-4. [Android Audio Pipeline & DSP](#4-android-audio-pipeline--dsp)
-5. [Autoplay & Recommendation Subsystem](#5-autoplay--recommendation-subsystem)
-6. [Lossless Online FLAC Relay Engine](#6-lossless-online-flac-relay-engine)
-7. [Firmware Setup & Flashing Guide](#7-firmware-setup--flashing-guide)
-8. [Client Installation & Configuration](#8-client-installation--configuration)
-9. [Developer Build & Toolchain](#9-developer-build--toolchain)
-10. [Troubleshooting & Diagnostics](#10-troubleshooting--diagnostics)
+4. [Firmware Audio Engine & Concurrency](#4-firmware-audio-engine--concurrency)
+5. [Android Audio Pipeline & DSP](#5-android-audio-pipeline--dsp)
+6. [Autoplay & Recommendation Subsystem](#6-autoplay--recommendation-subsystem)
+7. [Lossless Online FLAC Relay Engine](#7-lossless-online-flac-relay-engine)
+8. [Firmware Setup & Flashing Guide](#8-firmware-setup--flashing-guide)
+9. [Client Installation & Configuration](#9-client-installation--configuration)
+10. [Developer Build & Toolchain](#10-developer-build--toolchain)
+11. [Troubleshooting & Diagnostics](#11-troubleshooting--diagnostics)
+12. [Credits & License](#12-credits--license)
 
 ---
 
 ## 1. System Architecture
 
-The system delivers bit-perfect, ultra-low-latency 24-bit / 96 kHz audio transmission from an Android client to an external physical DAC over an ad-hoc or local Wi-Fi link, bypassing the lossy Android system mixer (`AudioFlinger`) and bandwidth-limited Bluetooth codecs (SBC/AAC).
+The system delivers bit-perfect, ultra-low-latency high-resolution audio transmission from an Android client to an external physical DAC over an ad-hoc or local Wi-Fi link, bypassing the lossy Android system mixer (`AudioFlinger`) and bandwidth-limited Bluetooth codecs (SBC/AAC).
 
 ```text
 +---------------------------------------------------------------------------------------+
@@ -38,7 +41,7 @@ The system delivers bit-perfect, ultra-low-latency 24-bit / 96 kHz audio transmi
 |                                                                                       |
 |  [ Local FLAC / Online Tidal Relay ] ---> [ Media3 / ExoPlayer Bitstream Decoder ]    |
 |                                                              |                        |
-|                                           [ Sample Converter: 24-bit in 32-bit LE ]   |
+|                                           [ Sample Converter: Signed 32-bit LE ]      |
 |                                                              |                        |
 |                     +----------------------------------------+                        |
 |                     |                                        |                        |
@@ -47,28 +50,32 @@ The system delivers bit-perfect, ultra-low-latency 24-bit / 96 kHz audio transmi
 |                                                              | (Port 8888, Non-block) |
 +--------------------------------------------------------------|------------------------+
                                                                |
-                                            IEEE 802.11n Wi-Fi | TCP Socket Link
-                                            (~3.072 Mbps raw)  | 192.168.43.x:8888
+                                            IEEE 802.11n Wi-Fi | TCP Stream
+                                            (Up to 12.3 Mbps)  | 192.168.43.x:8888
                                                                v
 +---------------------------------------------------------------------------------------+
 |                                 ESP32 RECEIVER & DAC                                  |
 |                                                                                       |
-|  [ FreeRTOS TCP Listener ] ---> [ Circular Ring Buffer (32 KB DMA Ring) ]             |
-|                                                |                                      |
-|                                     [ ESP32 Audio APLL Clock Generator ]             |
-|                                                | (MCLK / BCLK / WS Sync)              |
-|                                                v                                      |
-|                                  [ Hardware I2S0 Peripheral ]                         |
-|                                  (96 kHz, 32-bit slot, MSB First)                     |
-|                                                |                                      |
-|                                                v (BCK, LRCK, DIN)                     |
-|                                  [ Texas Instruments PCM5102A DAC ]                   |
-|                                                |                                      |
-|                                                v                                      |
-|                               [ Analog Line Out (L+, GND, R+) ]                       |
-|                                                |                                      |
-|                                                v                                      |
-|                                [ Stereo Audio Amplifier / Monitors ]                  |
+|  [ FreeRTOS TCP Listener (Pri 1) ] ---> [ SPSC Circular Ring Buffer (64 KB SRAM) ]   |
+|                                                              |                        |
+|                     +----------------------------------------+                        |
+|                     | Handshake (Pause/Resume Semaphores)                             |
+|                     v                                                                 |
+|  [ Real-Time Audio Worker Task (Pri 12, Core 1) ]                                     |
+|                     |                                                                 |
+|         +-----------+-----------+                                                     |
+|         |                       |                                                     |
+|         v (Mode 1: External)    v (Mode 2: Internal Built-in DAC)                     |
+|  [ Hardware I2S0 Peripheral ]  [ Dual 8-bit DAC with 1-LSB TPDF Dither & 1.65V Bias] |
+|  (GPIO 27, 14, 22 - APLL)      (GPIO 25: DAC1 Left, GPIO 26: DAC2 Right)              |
+|         |                       |                                                     |
+|         v                       v                                                     |
+|  [ TI PCM5102A DAC ]     [ Direct Line-Out to Amp ]                                   |
+|         |                       |                                                     |
+|         +-----------+-----------+                                                     |
+|                     |                                                                 |
+|                     v                                                                 |
+|         [ Analog Stereo Amplifier / Studio Monitors ]                                 |
 +---------------------------------------------------------------------------------------+
 ```
 
@@ -76,48 +83,38 @@ The system delivers bit-perfect, ultra-low-latency 24-bit / 96 kHz audio transmi
 
 ## 2. Hardware Specification & Pinouts
 
-### 2.1 Microcontroller & DAC Interface
+### 2.1 Mode 1: External TI PCM5102A 32-bit DAC Interface
 
-The receiver firmware is designed for Espressif **ESP32-WROOM-32** (or NodeMCU-32S / ESP32 DevKitC) interfacing with a **Texas Instruments PCM5102A** 32-bit / 384 kHz stereo audio DAC over the inter-IC sound (I2S) bus.
+The receiver firmware routes the external I2S bus to dedicated GPIOs, keeping high-frequency digital clocks isolated from the analog DAC pins (GPIO 25/26):
 
-| Signal Name | ESP32 GPIO | PCM5102A Pin | Wire Color (Typical) | Electrical Specification | Description |
+| Signal Name | ESP32 GPIO | PCM5102A Pin | Wire Function | Electrical Specification | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **VCC** | **VIN (5V)** / **3V3** | `VCC` | Red | 3.3V – 5.0V DC | Logic and analog rail power supply |
-| **GND** | **GND** | `GND` | Black | 0V System Ground | Common ground plane |
-| **BCLK** | **GPIO 26** | `BCK` | Yellow | 6.144 MHz Square Wave | Continuous bit clock (96 kHz × 32 × 2) |
-| **LRCK / WS** | **GPIO 25** | `LCK` | Green | 96.0 kHz Square Wave | Word select (0 = Left, 1 = Right) |
-| **DATA / DOUT** | **GPIO 22** | `DIN` | Blue | CMOS Level Digital Audio | Serial PCM audio data stream |
-| **SCK / MCLK** | **GND** | `SCK` | Black (to GND) | Pulled to 0V Logic Low | Directs PCM5102A to generate internal PLL |
+| **VCC** | **VIN (5V)** / **3V3** | `VCC` | Power Rail | 3.3V – 5.0V DC | Power supply (5V provides 2.1V RMS headroom) |
+| **GND** | **GND** | `GND` | Power Ground | 0V System Ground | Common ground plane |
+| **BCLK** | **GPIO 27** | `BCK` | Bit Clock | High-speed square wave | Continuous bit clock (isolated from DAC lines) |
+| **LRCK / WS** | **GPIO 14** | `LCK` | Word Select | Frame select wave | Channel framing clock (0 = Left, 1 = Right) |
+| **DATA / DOUT** | **GPIO 22** | `DIN` | Serial Data | CMOS level audio | Serial linear PCM audio bitstream |
+| **SCK / MCLK** | **GND** | `SCK` | Master Clock | 0V Logic Low | Directs PCM5102A to generate internal PLL |
 
-### 2.2 PCM5102A Hardware Jumper Configuration
+### 2.2 Mode 2: ESP32 Built-in Dual-Channel 8-bit DAC
+
+| Channel | ESP32 GPIO | Description |
+| :--- | :--- | :--- |
+| **Left Audio** | **GPIO 25** | DAC Channel 1 (DAC1) with 1-LSB TPDF Dither |
+| **Right Audio** | **GPIO 26** | DAC Channel 2 (DAC2) with 1-LSB TPDF Dither |
+| **Audio Ground** | **GND** | System Ground Reference |
+
+*Note: The built-in DAC uses mid-scale silence (`0x8000` / 1.65 V DC) on underruns and stops to prevent DC step speaker thumps.*
+
+### 2.3 PCM5102A Hardware Jumper Configuration
 
 Inspect the reverse side of the PCM5102A module. The solder bridges configure the onboard hardware registers:
 
 ```text
-  [1] FLT  -> GND (Low latency digital filter / Normal latency mode)
+  [1] FLT  -> GND (Low latency FIR digital filter)
   [2] DEMP -> GND (De-emphasis digital filter disabled)
-  [3] XSMT -> VCC (Soft un-mute active; pulled high through 10k resistor)
-  [4] FMT  -> GND (Standard Philips I2S format, left-justified clocking)
-```
-
-### 2.3 Analog Output Stage & 3-Wire Interconnect
-
-To prevent (L - R) differential cancellation or mono sum collapse at the power amplifier, the output must be terminated in a 3-wire unbalanced line-level stereo configuration:
-
-```text
-           +-----------------------------------------------+
-           |    PCM5102A 3.5mm Jack / Solder Terminals     |
-           +-----------------------------------------------+
-                     |               |               |
-                     | Pin L         | Pin G (GND)   | Pin R
-                     v               v               v
-                [ Left Signal ]  [ System GND ] [ Right Signal ]
-                     |               |               |
-                     v               v               v
-              [ Left Pre-In ]  [ Chassis GND ]  [ Right Pre-In ]
-           +-----------------------------------------------+
-           |       Analog Stereo Amplifier Input Board     |
-           +-----------------------------------------------+
+  [3] XSMT -> VCC (Soft un-mute active; pulled high to 3.3V)
+  [4] FMT  -> GND (Standard Philips I2S format)
 ```
 
 ---
@@ -129,8 +126,8 @@ To prevent (L - R) differential cancellation or mono sum collapse at the power a
 ```text
                   +-----------------------------------+
                   |   Android Client Hotspot / Router |
-                  |   SSID : Stash-Hotspot            |
-                  |   Pass : 12345678                 |
+                  |   SSID : FBI-VAN (or Stash-Hotspot)|
+                  |   Pass : 87654321 / 12345678       |
                   |   Subnet: 192.168.43.0/24         |
                   +-----------------------------------+
                                     |
@@ -138,44 +135,46 @@ To prevent (L - R) differential cancellation or mono sum collapse at the power a
             |                                               |
             v (DHCP Lease: 192.168.43.1)                    v (DHCP Lease: 192.168.43.x)
    [ Android Controller App ]                     [ ESP32 Receiver Node ]
-   TCP Client Socket (Outbound)                   TCP Server Socket (Listening @ 8888)
+   TCP Client Socket (Outbound)                   TCP Server Socket (Port 8888)
+   UDP Control Socket (Outbound)                  UDP Control Server (Port 8889)
 ```
-
-- **Transport:** Raw Streaming TCP Sockets over IPv4 (`AF_INET`, `SOCK_STREAM`).
-- **Target Port:** `8888`.
-- **Packet Structure:** Frameless, continuous binary byte stream. No RTP/RTSP container overhead.
 
 ### 3.2 PCM Frame Serialization Format
 
-Audio frames are encoded as uncompressed, linear little-endian 24-bit samples packed into 32-bit DMA boundaries:
+Audio frames are encoded as uncompressed, linear little-endian 32-bit samples (8 bytes per stereo frame):
 
 ```text
  Byte 0       Byte 1       Byte 2       Byte 3        Byte 4       Byte 5       Byte 6       Byte 7
 +------------+------------+------------+------------++------------+------------+------------+------------+
-| Left LSB   | Left Mid   | Left MSB   | Zero Pad   || Right LSB  | Right Mid  | Right MSB  | Zero Pad   |
-| (Bits 0-7) | (Bits 8-15)|(Bits 16-23)| (0x00)     || (Bits 0-7) | (Bits 8-15)|(Bits 16-23)| (0x00)     |
+| Left Byte0 | Left Byte1 | Left Byte2 | Left Byte3 || Right Byte0| Right Byte1| Right Byte2| Right Byte3|
 +------------+------------+------------+------------++------------+------------+------------+------------+
 |<----------------- LEFT CHANNEL SAMPLE ------------>||<---------------- RIGHT CHANNEL SAMPLE ----------->|
 |<--------------------------------------- 1 STEREO FRAME (8 BYTES) ------------------------------------->|
 ```
 
-### 3.3 Throughput & Bandwidth Computation
+### 3.3 Out-of-Band UDP Control (Port 8889)
 
-```text
-Sample Rate               : 96,000 Hz
-Bit Depth per Slot        : 32 bits (4 bytes)
-Audio Channels            : 2 (Stereo L + R)
-Frame Size                : 4 bytes × 2 channels = 8 bytes per frame
-Data Throughput Rate      : 96,000 frames/sec × 8 bytes = 768,000 bytes/sec
-Raw Bit Clock Frequency   : 768,000 × 8 bits = 6.144 Mbps
-Effective Wi-Fi Bandwidth : ~3.072 Mbps continuous payload
-```
-
-This requirement is comfortably satisfied by standard 20 MHz channel-width 802.11n Wi-Fi links, which achieve 20 to 54 Mbps indoor sustained throughput.
+| Command | Direction | Response | Description |
+| :--- | :--- | :--- | :--- |
+| `HIFI_DISCOVER` | App $\to$ ESP32 | `HIFI_DAC_HERE MODE:<1\|2>` | Broadcast discovery query. |
+| `GET_STATUS` | App $\to$ ESP32 | `HIFI_STATUS:MODE:<m>,RATE:<r>,RSSI:<rssi>,BUFFER:<pct>%` | Telemetry query. |
+| `MODE:<1\|2>` | App $\to$ ESP32 | `MODE_ACK:<mode>` / `MODE_NACK:<mode>` | Switches between External PCM5102A (1) and Internal DAC (2). |
+| `RATE:<sample_rate>` | App $\to$ ESP32 | `RATE_ACK:<rate>` / `RATE_NACK:<rate>` | Switches sample rate (e.g. 44100, 48000, 96000, 192000). |
 
 ---
 
-## 4. Android Audio Pipeline & DSP
+## 4. Firmware Audio Engine & Concurrency
+
+1. **Starvation-Free Handshake:** Eliminates FreeRTOS priority inversion and mutex starvation between `audioWorkerTask` (Priority 12, Core 1) and `loop()` (Priority 1, Core 1) using binary semaphores (`s_worker_paused`, `s_worker_resume`).
+2. **Lockless SPSC 64 KB Circular Ring Buffer:** Uses 32-bit internal SRAM ($2^{16}$ power-of-2) with atomic acquire/release semantics and optimized 2-segment `memcpy` operations.
+3. **Frame-Aligned Resets:** Restores 8-byte frame boundaries (`& ~7u`) on reconnects or mode switches, preventing L/R channel swaps or bit-shifted static.
+4. **Adaptive Anti-Jitter Prebuffering:** Watermark scales dynamically with sample rate ($\approx 40\text{ ms}$ cushion) to prevent buffer starvation.
+5. **Dynamic I2S Write Timeouts:** Prevents false timeouts at low sample rates (8 kHz) while keeping real-time responsiveness up to 192 kHz.
+6. **Pop-Free DC Silence:** Output silence helper writes `0x8000` (1.65 V DC mid-rail) for internal DAC underruns and stops, preventing violent 0 V step-transient speaker pops.
+
+---
+
+## 5. Android Audio Pipeline & DSP
 
 The Android client (`core/media`) implements a custom `AudioSink` and `ExoPlayer` renderer pipe:
 
@@ -193,48 +192,25 @@ The Android client (`core/media`) implements a custom `AudioSink` and `ExoPlayer
              +---> [ Android AudioTrack ] (Muted zeroes when ESP32 output active)
 ```
 
-1. **Native Decoding:** Uses high-efficiency C++ FLAC decoders via Android Media3, preserving 24-bit / 96 kHz resolution without resampling.
+1. **Native Decoding:** Uses high-efficiency C++ FLAC decoders via Android Media3, preserving bit-perfect linear PCM resolution without resampling.
 2. **Clock Decoupling:** When routing to the ESP32 socket streamer, the local `AudioTrack` receives digital silence to anchor timeline synchronization while the raw binary stream pumps asynchronously through non-blocking TCP sockets.
 3. **Buffer Management:** Employs a low-watermark flow controller to prevent underruns or buffer bloat.
 
 ---
 
-## 5. Autoplay & Recommendation Subsystem
+## 6. Autoplay & Recommendation Subsystem
 
-To replicate seamless playback (as in Spotify Radio), the app includes a dual-tier recommendation engine that automatically prevents queue exhaustion.
+To replicate seamless playback (as in Spotify Radio), the app includes a dual-tier recommendation engine that automatically prevents queue exhaustion:
 
-```text
-                                [ Active Track Nearing End ]
-                                             |
-                                             v
-                           { Are downloaded / local tracks available? }
-                                    /                 \
-                                   / (Yes)             \ (No)
-                                  v                     v
-                [ Local Recommendation Engine ]     [ Remote YouTube InnerTube Engine ]
-                - Scans Library tracks (KNN)        - Resolves Canonical VideoId
-                - Matches Tempo, Artist, Genre      - InnerTube /next API Query
-                - Zero network dependency           - Related Carousel Extraction
-                                  \                     /
-                                   \                   /
-                                    v                 v
-                         [ Append 10-12 Candidates to Active Media3 Queue ]
-                                             |
-                                             v
-                       [ Playback transitions seamlessly without pause ]
-```
-
-### 5.1 Fallback Hierarchy
 1. **Local Feature Matcher:** Matches artists and genres across on-device storage.
-2. **YouTube Music InnerTube Fallback:** Bypasses Last.fm API dependencies. Queries the `/next` endpoint and `RelatedResponseParser` directly, retrieving 12–30 curated recommendations.
-3. **Queue Widening (`widen()`):** As the queue drains, the station engine queries related artist catalogues, guaranteeing indefinite continuous streaming.
+2. **YouTube Music InnerTube Fallback:** Queries the `/next` endpoint directly, retrieving curated recommendations.
+3. **Queue Widening (`widen()`):** As the queue drains, the station engine queries related artist catalogues, guaranteeing continuous playback.
 
 ---
 
-## 6. Lossless Online FLAC Relay Engine
+## 7. Lossless Online FLAC Relay Engine
 
 The streaming layer connects to authenticated lossless relays:
-
 - **Authentication:** Elliptic Curve Digital Signature Algorithm (ECDSA) with the NIST P-256 (`secp256r1`) curve.
 - **Embedded Public Key:** Verified against the relay distribution network to establish cryptographically validated handshakes.
 - **Dynamic Stream Fallback:**
@@ -244,113 +220,68 @@ The streaming layer connects to authenticated lossless relays:
 
 ---
 
-## 7. Firmware Setup & Flashing Guide
+## 8. Firmware Setup & Flashing Guide
 
-### 7.1 Toolchain Requirements
+### 8.1 Toolchain Requirements
 - **Arduino IDE** (v2.x) or **PlatformIO Core / CLI**.
 - **Espressif ESP32 Board Core:** Version 2.0.14 or 3.x.
 
-### 7.2 Flashing via PlatformIO CLI
-```bash
-# Navigate to the firmware workspace
-cd firmware_wifi_softap
-
-# Build and flash using PlatformIO
-pio run --target upload --upload-port COM3
-
-# Monitor serial output (115200 baud)
-pio device monitor -b 115200
-```
-
-### 7.3 Flashing via Arduino IDE
+### 8.2 Flashing via Arduino IDE
 1. Open [`firmware_wifi_softap/firmware_wifi_softap.ino`](firmware_wifi_softap/firmware_wifi_softap.ino).
 2. Under **Tools → Board**, select **ESP32 Dev Module**.
-3. Configure the following parameters:
-   - **CPU Frequency:** 240 MHz (High Performance).
-   - **Flash Frequency:** 80 MHz.
-   - **Partition Scheme:** Minimal SPIFFS (1.9MB APP with OTA / Large SPIFFS).
-   - **Core Debug Level:** None (or Info for debugging).
+3. Configure the parameters:
+   - **CPU Frequency:** 240 MHz.
+   - **Upload Speed:** 921600 (or 115200).
 4. Connect the ESP32 over USB and click **Upload**.
 
 ---
 
-## 8. Client Installation & Configuration
+## 9. Client Installation & Configuration
 
-### 8.1 Android APK Installation
+### 9.1 Android APK Installation
 1. Download the latest compiled package: [**Music.apk**](https://github.com/Gokul3611/HIFI_music_app/releases/download/latest/Music.apk).
-2. Transfer to device or open directly in Android Chrome.
-3. Tap `Music.apk` → **Settings** → **Allow from this source** (if sideloading).
-4. Launch the **Music** application.
+2. Install the APK on your device.
+3. Launch the **Music** application.
 
-### 8.2 Hardware Output Pairing
-1. Enable **Personal Hotspot** on Android:
-   - **SSID / Network Name:** `Stash-Hotspot`
-   - **Security:** WPA2-PSK
-   - **Password:** `12345678`
-   - **Band:** 2.4 GHz or 5 GHz
-2. Power the ESP32. The onboard LED will blink while negotiating DHCP, then stay solid once connected.
-3. In **Music**, go to **Settings → Audio & Quality → Output Selection**.
-4. Select **ESP32 Hi-Fi Direct**. Audio routing shifts from the handset speakers to the analog DAC outputs immediately.
+### 9.2 Hardware Output Pairing
+1. Enable **Personal Hotspot** on Android (2.4 GHz Band, matching credentials in sketch).
+2. Power the ESP32. It connects in ~3 seconds.
+3. In **Music**, navigate to **Settings → Audio & Quality → Output Mode**.
+4. Select **ESP32 Hi-Fi Direct** and choose your preferred DAC mode.
 
 ---
 
-## 9. Developer Build & Toolchain
-
-### 9.1 Environment Prerequisites
-- **JDK:** OpenJDK 17 (Microsoft or Eclipse Temurin).
-- **Android SDK:** Platform API Level 35.
-- **NDK:** Version `27.0.12077973`.
-- **Build System:** Gradle 8.12 with Android Gradle Plugin (AGP) 8.8.x.
-
-### 9.2 Build Commands
+## 10. Developer Build & Toolchain
 
 ```bash
 # Clone the repository
 git clone https://github.com/Gokul3611/HIFI_music_app.git
 cd HIFI_music_app
 
-# Run compile-time checks and linting
-./gradlew lintDebug
-
-# Execute unit test suite (core:media, core:data, data:download)
+# Execute unit test suite
 ./gradlew testDebugUnitTest
 
 # Assemble production signed Release APK
 ./gradlew assembleRelease
-
-# Direct install to ADB-connected target
-./gradlew installDebug
 ```
 
 ---
 
-## 10. Troubleshooting & Diagnostics
-
-### 10.1 Diagnostics Matrix
+## 11. Troubleshooting & Diagnostics
 
 | Symptom | Probable Cause | Diagnostic Command / Remedy |
 | :--- | :--- | :--- |
 | **No audio output from DAC** | SCK pin floating | Tie PCM5102A `SCK` pin directly to `GND` to engage internal PLL. |
-| **Distorted / Static Noise** | Bit clock / slot mismatch | Ensure firmware specifies `I2S_BITS_PER_SAMPLE_32BIT` and PCM is LE. |
-| **Audio Stutter / Dropouts** | Wi-Fi TCP buffer exhaustion | Lower phone-to-ESP32 distance; ensure Hotspot is set to 2.4 GHz channel 6 or 11. |
-| **Mono sound output** | Audio Ground floating | Connect all 3 wires (L+, GND, R+) from PCM5102A to the amplifier input. |
-| **Autoplay does not trigger** | Autoplay Radio toggled off | Navigate to **Settings → Playback → Autoplay Radio** and toggle ON. |
-| **In-app update failure** | Network sandbox or repository mismatch | Ensure client tracks `Gokul3611/HIFI_music_app` repository release assets. |
-
-### 10.2 Serial Log Monitoring (`logcat`)
-```bash
-# Monitor Android audio pipeline output
-adb logcat -s StashPlayback PlayerRepositoryImpl Esp32SocketStreamer
-
-# Expected streaming handshake:
-# I/Esp32SocketStreamer: Connected to ESP32 DAC @ 192.168.43.155:8888 (TCP)
-# I/PlayerRepositoryImpl: Routing active audio -> 24-bit / 96000 Hz stereo PCM
-```
+| **Distorted / Static Noise** | Frame alignment loss | Ensure firmware has 8-byte frame reset (`& ~7u`). Restart stream. |
+| **Digital squeal into amp** | Pin conflict | Use `GPIO 27` (BCK) and `GPIO 14` (WS) for PCM5102A; keep `GPIO 25/26` exclusively for Internal DAC. |
+| **Audio Stutter / Dropouts** | Wi-Fi modem sleep | Firmware automatically sets `WiFi.setSleep(false)` on connection. |
+| **Loud pop on start/stop** | Internal DAC DC jump | Firmware uses `outputDmaSilence()` with mid-scale `0x8000` (1.65V) to eliminate pops. |
 
 ---
 
-## 🙏 Credits & Acknowledgements
+## 12. Credits & License
 
+### 🙏 Credits & Acknowledgements
 This application is built upon the phenomenal foundation of **Stash**, conceived, designed, and architected by **Rawnald Clark** ([@rawnaldclark](https://github.com/rawnaldclark)).
 
 Over **2,600+ commits** of tireless open-source craftsmanship by Rawnald Clark made this platform possible:
@@ -360,12 +291,7 @@ Over **2,600+ commits** of tireless open-source craftsmanship by Rawnald Clark m
 - **Metadata & Tagging:** In-process FFmpeg Vorbis/Opus comment embedder, cover art processing, and library file organization.
 - **InnerTube & Multi-Platform Sync:** Innovative client token scraping, Liked Songs synchronization, and cross-platform music imports.
 
-Massive credit and deepest gratitude to **Rawnald Clark** for creating and sharing the foundational Stash music player with the world.
-
----
-
-## 📜 License
-
+### 📜 License
 ```text
 Copyright (C) 2026 Gokul E. & Contributors
 Base architecture upstream (C) Rawnald Clark.
