@@ -11,7 +11,7 @@
 
     <!-- App Bar & Help Menu -->
     <string name="home_cd_wordmark" translatable="false">Music</string>
-    <string name="home_cd_discord">Join the Stash Discord</string>
+    <string name="home_cd_discord">Join the Music Discord</string>
     <string name="home_cd_help_menu">Report an issue or help translate</string>
     <string name="home_report_issue">Report an issue</string>
     <string name="home_report_issue_desc">Grab diagnostics, then open GitHub</string>
@@ -25,7 +25,7 @@
     <string name="home_lossless_banner_action">Set up →</string>
     <string name="home_cd_dismiss_lossless_banner">Dismiss lossless banner</string>
     <string name="home_lossless_offline_title">No lossless right now</string>
-    <string name="home_lossless_offline_subtitle">No lossless source is answering, so Stash is falling back to lossy audio. Connect your own Qobuz account for FLAC.</string>
+    <string name="home_lossless_offline_subtitle">No lossless source is answering, so Music is falling back to lossy audio. Connect your own Qobuz account for FLAC.</string>
     <string name="home_lossless_offline_action">Connect →</string>
     <string name="home_cd_dismiss_lossless_offline_banner">Dismiss lossless-offline banner</string>
 
@@ -62,7 +62,7 @@
     <string name="home_action_minimize">Minimize for now</string>
 
     <!-- Ticker Announcements -->
-    <string name="home_ticker_announcement_1">Stash is a community powered open-source project dedicated to the love and growth of music. Thank you to our supporters.</string>
+    <string name="home_ticker_announcement_1">Music is a community powered open-source project dedicated to the love and growth of music. Thank you to our supporters.</string>
     <string name="home_ticker_announcement_2">Devs wanted — join the Discord to help build the future of music.</string>
     <string name="home_ticker_announcement_3">Open source, open to PRs — contributors welcome on GitHub.</string>
 

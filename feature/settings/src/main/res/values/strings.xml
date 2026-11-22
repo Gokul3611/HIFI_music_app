@@ -687,7 +687,7 @@
     <string name="settings_download_mode_any_network_label">Any network</string>
     <string name="settings_download_mode_any_network_desc">Mobile data too.</string>
 
-    <string name="settings_stash_mixes_title">Stash Mixes (beta)</string>
+    <string name="settings_stash_mixes_title">Music Mixes (beta)</string>
     <string name="settings_stash_mixes_subtitle_enabled">Daily Discover, Deep Cuts and First Listen refresh on their own</string>
     <string name="settings_stash_mixes_subtitle_disabled">Mixes hidden; no background discovery</string>
     <string name="settings_qobuz_discovery_title">Qobuz discovery on Home</string>
@@ -698,7 +698,7 @@
     <string name="settings_listening_history_title">Listening history</string>
     <string name="settings_listening_history_paused_subtitle">Paused: new listens aren\'t saved</string>
     <string name="settings_listening_history_active_subtitle">Pause or clear what this phone remembers</string>
-    <string name="settings_web_link_nav_title">Link Stash on the web</string>
+    <string name="settings_web_link_nav_title">Link Music on the web</string>
     <string name="settings_web_link_nav_subtitle">Pick up where you left off, mirror, send your library</string>
 
     <string name="settings_storage_external_folder_fallback">External folder</string>
@@ -1073,9 +1073,9 @@
     <string name="settings_web_link_rename_other_hint">This name stays on this phone.</string>
 
     <!-- Settings > Library & Storage > Your Stash: the link's page, which also gathers supporter status, cloud and backups -->
-    <string name="settings_your_stash_title">Your Stash</string>
+    <string name="settings_your_stash_title">Your Music</string>
     <string name="settings_your_stash_nav_subtitle">Link the web player, see your devices, supporter status, cloud and backups</string>
-    <string name="settings_your_stash_posture">Your Stash is your devices. No account, no email. What your phone and browsers share with each other is encrypted before it leaves them.</string>
+    <string name="settings_your_stash_posture">Your Music is your devices. No account, no email. What your phone and browsers share with each other is encrypted before it leaves them.</string>
     <string name="settings_your_stash_section_devices">Devices</string>
     <string name="settings_your_stash_no_browser_yet">No browser linked yet</string>
     <string name="settings_your_stash_section_supporter">Supporter</string>
@@ -1087,7 +1087,7 @@
     <string name="settings_your_stash_section_backups">Backups</string>
     <string name="settings_your_stash_section_coming">What\'s coming</string>
     <string name="settings_your_stash_coming_passkey_title">Recover with a passkey</string>
-    <string name="settings_your_stash_coming_passkey_desc">Lose your phone and a passkey brings Your Stash back. Still no email, no password.</string>
+    <string name="settings_your_stash_coming_passkey_desc">Lose your phone and a passkey brings Your Music back. Still no email, no password.</string>
     <string name="settings_your_stash_coming_backup_title">Nightly encrypted backup</string>
     <string name="settings_your_stash_coming_backup_desc">Your library and settings, backed up each night and encrypted on your phone first, so only you can read them.</string>
     <string name="settings_your_stash_coming_restore_title">Restore on a new phone</string>
@@ -1112,7 +1112,7 @@
     <string name="settings_mirror_choose_playlists_title">Choose playlists</string>
     <string name="settings_mirror_choose_playlists_subtitle">Spotify and YouTube Music playlists go to the web only, read-only there.</string>
     <string name="settings_mirror_plays_title">Plays</string>
-    <string name="settings_mirror_plays_subtitle_note">" · Plays from the web show in History, never in your Stash Mixes"</string>
+    <string name="settings_mirror_plays_subtitle_note">" · Plays from the web show in History, never in your Music Mixes"</string>
     <plurals name="settings_mirror_held_unlikes">
         <item quantity="one">Mirroring is holding %1$d unlike from this phone. Send it to %2$s, or keep that like?</item>
         <item quantity="other">Mirroring is holding %1$d unlikes from this phone. Send them to %2$s, or keep those likes?</item>
@@ -1185,7 +1185,7 @@
     <string name="diagnostics_title">Diagnostics</string>
     <string name="diagnostics_failed_to_build">Failed to build diagnostics</string>
     <string name="diagnostics_review_description">Review what will be shared. No passwords or tokens are included. Share sends a zip with this report plus the full recent log; attach it to your GitHub issue.</string>
-    <string name="diagnostics_share_subject">Stash diagnostics</string>
+    <string name="diagnostics_share_subject">Music diagnostics</string>
     <string name="diagnostics_share_no_app">No app available to share.</string>
     <string name="diagnostics_share_button">Share</string>
     <string name="diagnostics_copied_toast">Copied</string>
