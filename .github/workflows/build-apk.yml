@@ -49,27 +49,18 @@ jobs:
       - name: Fix gradlew permissions
         run: chmod +x gradlew
 
+      - name: Cache Android NDK
+        id: cache-ndk
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk/ndk/27.0.12077973
+          key: ${{ runner.os }}-ndk-27.0.12077973
+
       - name: Accept SDK Licenses & Install NDK + CMake
+        if: steps.cache-ndk.outputs.cache-hit != 'true'
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.0.12077973" "cmake;3.22.1" > /dev/null
-
-      - name: Set up Arduino CLI
-        uses: arduino/setup-arduino-cli@v2
-
-      - name: Install ESP32 Arduino core
-        run: |
-          arduino-cli config init --overwrite
-          arduino-cli config add board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
-          arduino-cli core update-index
-          arduino-cli core install esp32:esp32@2.0.17
-
-      - name: Compile ESP32 firmware
-        run: |
-          set -o pipefail
-          arduino-cli compile --fqbn esp32:esp32:esp32 \
-            --build-path "$RUNNER_TEMP/esp32-build" firmware_wifi_softap \
-            2>&1 | tee firmware-build.log
 
       - name: Run unit tests and build Debug APK
         env:
@@ -103,7 +94,7 @@ jobs:
                           print("\n".join(result.text.splitlines()[:18]))
                       print()
           PY
-          for log_file in firmware-build.log android-build.log android-test-failures.log; do
+          for log_file in android-build.log android-test-failures.log; do
             if [ -f "$log_file" ]; then
               if [ "$log_file" = "android-build.log" ]; then
                 details="$(grep -E '(^e: |^FAILURE:|What went wrong:|Execution failed for task|Unresolved reference|Type mismatch|Cannot infer|Expecting |Compilation error|There were failing tests|tests? failed|FAILED)' "$log_file" | tail -n 45 || true)"
@@ -128,7 +119,6 @@ jobs:
         with:
           name: Build-logs
           path: |
-            firmware-build.log
             android-build.log
             android-test-failures.log
             core/media/build/test-results/testDebugUnitTest/TEST-*.xml
