@@ -24,4 +24,10 @@
         <item quantity="one">Tidied %d duplicate song</item>
         <item quantity="other">Tidied %d duplicate songs</item>
     </plurals>
+
+    <!-- Spotify Onboarding Prompt -->
+    <string name="onboarding_spotify_prompt_title">Sync your Spotify</string>
+    <string name="onboarding_spotify_prompt_subtitle">Import your playlists, liked songs &amp; library in one tap</string>
+    <string name="onboarding_spotify_prompt_action">Connect</string>
+    <string name="onboarding_spotify_prompt_dismiss">Dismiss</string>
 </resources>

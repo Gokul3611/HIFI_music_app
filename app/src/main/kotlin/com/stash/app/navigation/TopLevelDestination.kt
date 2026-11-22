@@ -39,8 +39,11 @@ enum class TopLevelDestination(val selectedIcon: ImageVector, val unselectedIcon
 @Serializable data object SettingsPlaybackRoute
 @Serializable data object SettingsAudioQualityRoute
 @Serializable data object SettingsLosslessSourcesRoute
-/** Settings › Accounts & Sync; [cloud]: opened from Your Stash's Cloud rows, Cloud storage is scrolled into view. */
-@Serializable data class SettingsAccountsRoute(val cloud: Boolean = false)
+/** Settings › Accounts & Sync; [cloud]: opened from Your Stash's Cloud rows, Cloud storage is scrolled into view. [connectSpotify]: triggers Spotify web sign-in on arrival. */
+@Serializable data class SettingsAccountsRoute(
+    val cloud: Boolean = false,
+    val connectSpotify: Boolean = false,
+)
 /**
  * Settings › Library & Storage; [backup]: opened from Your Stash's Backups rows, the name of the
  * [com.stash.feature.settings.weblink.BackupShortcut] to start there.

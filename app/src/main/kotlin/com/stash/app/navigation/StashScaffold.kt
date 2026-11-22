@@ -393,6 +393,18 @@ fun StashScaffold(
                                 // "Continue from" card (one card per browser; it comes back when the browser stops).
                                 val remoteShown = if (remoteHere) com.stash.feature.nowplaying.remote.RemoteCardHost() else false
                                 if (!remoteShown) com.stash.feature.nowplaying.handoff.HandoffCard()
+
+                                // Onboarding prompt for new users: prompts to connect Spotify after exploring
+                                val inSettingsOrAuth = navBackStackEntry?.destination?.let {
+                                    it.hasRoute<SettingsRoute>() || it.hasRoute<SettingsAccountsRoute>()
+                                } == true
+                                if (!inSettingsOrAuth && playerClosed) {
+                                    com.stash.app.onboarding.SpotifyOnboardingPrompt(
+                                        onConnectSpotify = {
+                                            navController.openSettingsPage(SettingsAccountsRoute(connectSpotify = true))
+                                        },
+                                    )
+                                }
                             }
                         }
                         // "Chrome on Windows sent you 3 playlists and 40 likes." (link-sync spec §2.3): a

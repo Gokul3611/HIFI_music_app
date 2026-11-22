@@ -53,10 +53,20 @@ fun SettingsAccountsScreen(
     modifier: Modifier = Modifier,
     /** Opened from Your Stash's Cloud rows: Cloud storage, last on the page, is scrolled into view once on arrival. */
     focusCloud: Boolean = false,
+    /** Opened from the onboarding prompt: triggers Spotify sign-in automatically on arrival. */
+    connectSpotify: Boolean = false,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val extendedColors = com.stash.core.ui.theme.StashTheme.extendedColors
+    // Single-shot auto-trigger for Spotify sign-in when arriving from the onboarding prompt.
+    var spotifyTriggered by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(connectSpotify, uiState.spotifyAuthState) {
+        if (connectSpotify && !spotifyTriggered && uiState.spotifyAuthState !is com.stash.core.auth.model.AuthState.Connected) {
+            spotifyTriggered = true
+            viewModel.onConnectSpotify()
+        }
+    }
     // Your Stash's scroll to Cloud storage happens once. Kept up here, before the sign-in screens
     // below return early: inside the page it was dropped while one showed, and fired again after.
     var cloudFocused by rememberSaveable { mutableStateOf(false) }

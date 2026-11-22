@@ -122,7 +122,7 @@ private fun AboveChrome(content: @Composable () -> Unit) {
  * A Settings page opened from Your Stash. Settings pages share the hub's ViewModel (they look [SettingsRoute] up on the back
  * stack), and a pairing link can open Your Stash with no hub below it: the hub goes first then, so the lookup can't fail.
  */
-private fun NavHostController.openSettingsPage(route: Any) {
+internal fun NavHostController.openSettingsPage(route: Any) {
     if (runCatching { getBackStackEntry(SettingsRoute) }.isFailure) navigate(SettingsRoute) { launchSingleTop = true }
     navigate(route)
 }
@@ -473,9 +473,11 @@ private fun StashNavGraph(
                 val settingsEntry = remember(backStackEntry) { navController.getBackStackEntry(SettingsRoute) }
                 val viewModel: com.stash.feature.settings.SettingsViewModel =
                     androidx.hilt.navigation.compose.hiltViewModel(settingsEntry)
+                val route = backStackEntry.toRoute<SettingsAccountsRoute>()
                 com.stash.feature.settings.SettingsAccountsScreen(
                     onBack = { navController.popBackStack() },
-                    focusCloud = backStackEntry.toRoute<SettingsAccountsRoute>().cloud,
+                    focusCloud = route.cloud,
+                    connectSpotify = route.connectSpotify,
                     viewModel = viewModel,
                 )
             }
