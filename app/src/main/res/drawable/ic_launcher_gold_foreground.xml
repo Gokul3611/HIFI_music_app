@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="18"
+        android:translateY="18"
+        android:scaleX="3.0"
+        android:scaleY="3.0">
+        <!-- Solid Noteheads -->
+        <path
+            android:fillColor="#FDE68A"
+            android:pathData="M6,17 C7.6569,17 9,17.8954 9,19 C9,20.1046 7.6569,21 6,21 C4.3431,21 3,20.1046 3,19 C3,17.8954 4.3431,17 6,17 Z" />
+        <path
+            android:fillColor="#FDE68A"
+            android:pathData="M18,15 C19.6569,15 21,15.8954 21,17 C21,18.1046 19.6569,19 18,19 C16.3431,19 15,18.1046 15,17 C15,15.8954 16.3431,15 18,15 Z" />
+        <!-- Stems, Beams and Outlines -->
+        <path
+            android:strokeColor="#FDE68A"
+            android:strokeWidth="2.2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M9,19 C9,20.1046 7.6569,21 6,21 C4.3431,21 3,20.1046 3,19 C3,17.8954 4.3431,17 6,17 C7.6569,17 9,17.8954 9,19 Z M9,19 V5 L21,3 V17 M21,17 C21,18.1046 19.6569,19 18,19 C16.3431,19 15,18.1046 15,17 C15,15.8954 16.3431,15 18,15 C19.6569,15 21,15.8954 21,17 Z M9,9 L21,7" />
+    </group>
+</vector>

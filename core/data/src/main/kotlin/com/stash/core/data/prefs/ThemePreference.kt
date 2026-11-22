@@ -1,6 +1,7 @@
 package com.stash.core.data.prefs
 
 import com.stash.core.model.AlbumColourMode
+import com.stash.core.model.AppIcon
 import com.stash.core.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
 
@@ -53,4 +54,13 @@ interface ThemePreference {
 
     /** Persists the UI scale, clamped to the range and snapped to the 0.05 grid. */
     suspend fun setUiScale(scale: Float)
+
+    /**
+     * Settings › Appearance › App icon: which launcher icon edition is active.
+     * Defaults to [AppIcon.DEFAULT].
+     */
+    val appIcon: Flow<AppIcon>
+
+    /** Persists the chosen app icon. */
+    suspend fun setAppIcon(icon: AppIcon)
 }

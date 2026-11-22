@@ -1815,6 +1815,25 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
+     * Active launcher app icon edition (Settings › Appearance › App icon).
+     */
+    val appIcon: StateFlow<com.stash.core.model.AppIcon> = themePreference.appIcon.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        com.stash.core.model.AppIcon.DEFAULT,
+    )
+
+    /**
+     * Persists the selected app icon edition and applies the corresponding `<activity-alias>`.
+     */
+    fun onAppIconChanged(context: android.content.Context, icon: com.stash.core.model.AppIcon) {
+        AppIconManager.setAppIcon(context, icon)
+        viewModelScope.launch {
+            themePreference.setAppIcon(icon)
+        }
+    }
+
+    /**
      * Persists a new download-network mode AND re-schedules the two
      * workers that depend on it ([StashDiscoveryWorker],
      * [TagEnrichmentWorker]) so the updated `Constraints` take effect

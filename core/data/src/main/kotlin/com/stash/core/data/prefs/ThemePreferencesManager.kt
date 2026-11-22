@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.stash.core.model.AlbumColourMode
+import com.stash.core.model.AppIcon
 import com.stash.core.model.ThemeMode
 import com.stash.core.model.UiScale
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -98,6 +99,21 @@ class ThemePreferencesManager @Inject constructor(
     override suspend fun setUiScale(scale: Float) {
         context.themeDataStore.edit { prefs ->
             prefs[uiScaleKey] = UiScale.snap(scale)
+        }
+    }
+
+    private val appIconKey = stringPreferencesKey("app_icon")
+
+    /** Emits the chosen [AppIcon], defaulting to [AppIcon.DEFAULT]. */
+    override val appIcon: Flow<AppIcon> = context.themeDataStore.data.map { prefs ->
+        val id = prefs[appIconKey]
+        AppIcon.fromId(id)
+    }.distinctUntilChanged()
+
+    /** Persists the chosen [AppIcon]. */
+    override suspend fun setAppIcon(icon: AppIcon) {
+        context.themeDataStore.edit { prefs ->
+            prefs[appIconKey] = icon.id
         }
     }
 }
