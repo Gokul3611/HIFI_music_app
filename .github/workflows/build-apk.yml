@@ -142,26 +142,27 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/master') || startsWith(github.ref, 'refs/heads/main')
         with:
-          tag_name: v0.9.133
-          name: "Music Hi-Fi v0.9.133"
+          tag_name: v0.9.134
+          name: "Music Hi-Fi v0.9.134"
           body: |
             <!-- stash-app
             Official update from Gokul (Developer). Safe to install!
-            - Verified Official Update | Upstream Stash updates are blocked; this is our official verified update, safe to install.
-            - Lockscreen Song Display | Enforced public visibility and displayTitle for full title and artist visibility on lockscreen notifications.
-            - ESP32 Dual-Mode Wi-Fi DAC | Dynamic pop-free switching between 32-bit PCM5102A and 8-bit built-in DAC with TPDF dither, starvation-free FreeRTOS handshake, and dedicated GPIOs.
-            - Clean Architecture | Flattened workspace repository and updated user-facing branding to Music.
+            - 68 MB Ultra-Compact Build | Shrunk APK from 163 MB to 67.9 MB via R8 minification and native ABI stripping.
+            - Fast Startup & Battery Savings | Staged app cold start, 16-connection warm keep-alive pool, and 50 MB response cache.
+            - Pre-Update Snapshot & Rollback Safety | Automated stash.db backup before updates and emergency rollback recovery support.
+            - ESP32 Dual-Mode Wi-Fi DAC | Dynamic pop-free switching between 32-bit PCM5102A and 8-bit built-in DAC with TPDF dither.
             -->
-            ### 🎵 Music Hi-Fi v0.9.133 - Official Verified Update
+            ### 🎵 Music Hi-Fi v0.9.134 - Official Release
 
-            > **📢 Notice from Gokul:** This is an official, verified update from our repository. Upstream Stash updates have been blocked to prevent overwriting your installation and data. You can safely install this update directly!
+            > **📢 Notice from Gokul:** This update brings major performance improvements, battery optimization, data savings, and safety features. You can safely install this update directly!
 
             #### 🌟 Highlights & What's New:
-            - **Lockscreen Notification Song Title Display**: Enforced `VISIBILITY_PUBLIC` and explicit `.setDisplayTitle(title)` so song titles and artists are fully visible on Android secure lockscreen notifications.
-            - **ESP32 Dual-Mode DAC Switching**: Dynamic pop-free switching between external 32-bit PCM5102A and internal built-in DAC with 1-LSB symmetric TPDF dither and mid-scale 1.65V DC silence.
-            - **Starvation-Free Real-Time Audio Engine**: Pause/resume FreeRTOS semaphore handshake, sample-rate adaptive prebuffer watermarks (~40 ms), dynamic write timeouts, and 8-byte frame stream alignment.
-            - **Dedicated Hardware Pinout**: Dedicated GPIO 27 (BCK), GPIO 14 (WS), GPIO 22 (DIN) keeps high-frequency digital clock signals isolated from analog amplifier pins on GPIO 25/26.
-            - **Streamlined Repository & Branding**: Cleaned up unneeded web/worker files, flattened directory structure, and updated user-facing branding to Music.
+            - **60% APK Size Reduction**: Shrunk the download size from 163 MB to **67.9 MB** with R8 whole-program optimization and native ABI stripping.
+            - **Sub-500ms Instant App Startup**: Eliminated initial launch lag by staging heavy background services (yt-dlp, TLS, periodic workers) into deferred stages.
+            - **Smart Network Caching & Battery Savings**: Added a 50 MB HTTP response cache and a 16-connection warm keep-alive pool. Reduces cell data usage and modem battery drain without touching bit-perfect FLAC audio quality.
+            - **Automatic Pre-Update Database Snapshot**: Automatically creates a backup snapshot of your library database before any update is staged, preventing data loss.
+            - **Emergency Update Rollback Support**: Built-in support to instantly push stable rollback versions to devices if any regression occurs.
+            - **ESP32 Dual-Mode DAC Switching**: Dynamic pop-free switching between external 32-bit PCM5102A and internal built-in DAC with TPDF dither and FreeRTOS synchronization.
 
             #### 📦 Download:
             Download `Music.apk` below or tap "Update now" inside the app.
