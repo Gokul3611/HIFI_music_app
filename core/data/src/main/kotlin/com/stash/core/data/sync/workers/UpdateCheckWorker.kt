@@ -288,7 +288,25 @@ class UpdateCheckWorker(
     }
 
     private fun fetchReleaseBody(installedVersion: String): String? {
+        // 1. Primary: Direct GitHub Releases API (100% automated on every git release, zero manual URLs)
         try {
+            val ghRequest = Request.Builder()
+                .url(GITHUB_RELEASES_URL)
+                .header("User-Agent", "Music-Android/$installedVersion")
+                .header("Accept", "application/vnd.github.v3+json")
+                .build()
+            httpClient.newCall(ghRequest).execute().use { response ->
+                if (response.isSuccessful) {
+                    val body = response.body?.string()
+                    if (!body.isNullOrBlank()) return body
+                }
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "GitHub releases direct check skipped or failed: ${e.message}")
+        }
+
+        // 2. Fallback: Apps Script mirror (in case of GitHub API rate-limiting or emergency overrides)
+        return try {
             val scriptRequest = Request.Builder()
                 .url(APPS_SCRIPT_UPDATE_URL)
                 .header("User-Agent", "Music-Android/$installedVersion")
@@ -297,25 +315,12 @@ class UpdateCheckWorker(
                 if (response.isSuccessful) {
                     val scriptBody = response.body?.string()
                     if (!scriptBody.isNullOrBlank() && (scriptBody.contains("tag_name") || scriptBody.contains("apk_url") || scriptBody.contains("version"))) {
-                        return scriptBody
-                    }
-                }
+                        scriptBody
+                    } else null
+                } else null
             }
         } catch (e: Exception) {
-            Log.d(TAG, "Apps Script update check skipped or failed: ${e.message}")
-        }
-
-        return try {
-            val ghRequest = Request.Builder()
-                .url(GITHUB_RELEASES_URL)
-                .header("User-Agent", "Music-Android/$installedVersion")
-                .header("Accept", "application/vnd.github.v3+json")
-                .build()
-            httpClient.newCall(ghRequest).execute().use { response ->
-                if (response.isSuccessful) response.body?.string() else null
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "GitHub releases check failed: ${e.message}")
+            Log.w(TAG, "Apps Script fallback update check failed: ${e.message}")
             null
         }
     }
