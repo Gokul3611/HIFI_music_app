@@ -546,39 +546,18 @@ class StashApplication : Application(), Configuration.Provider {
         // LosslessUrlPrefetcher.warmUp. It used to be swept by a 60s loop
         // launched here, which woke for the entire life of the process to
         // sweep a map that is empty unless the user is browsing.)
+        // Deferred Stage 2: Heavy speculative warmups (yt-dlp QuickJS, TLS).
+        // Delay 3s so the initial UI frame renders and settles instantly without CPU/disk contention.
         applicationScope.launch {
-            // Best-effort prewarm: initialize, freshen yt-dlp to the latest
-            // nightly, and warm the player-JS + QuickJS + EJS caches so the
-            // first real user preview/download pays neither the ~14 s
-            // cold-start cost nor the nightly-update latency. This shares the
-            // once-per-session gate with the download path (DownloadExecutor),
-            // so whichever runs first does the work and the other returns
-            // immediately — downloads are still hard-gated on a fresh binary.
-            //
-            // Gated, because this is speculative work with a real price: a
-            // nightly binary download plus a throwaway YouTube extraction
-            // through QuickJS, on EVERY cold start, for a user who may never
-            // preview or stream anything. Offline it cannot even succeed.
-            //
-            // Skipping it in offline mode does not slow downloads down where
-            // anyone can feel it: the download path calls ensureFreshened()
-            // itself, inside a worker, where the one-off cost is invisible.
-            // The latency this prewarm exists to hide is the first stream
-            // resolve; streaming is always allowed, so gate on network only.
-            //
-            // Not under Battery Saver either: a nightly download and a QuickJS extraction are the
-            // heaviest thing a cold start does, and downloads still freshen it themselves.
+            delay(3000L)
             if (!saverAtStart && connectivityMonitor.isConnected()) {
                 ytDlpManager.ensureFreshened()
                 ytDlpManager.warmUp()
             }
         }
-        // Warm up music.youtube.com TLS + DNS in the first 2s of launch so
-        // the first search request doesn't pay the full handshake cost.
-        // Search still works in offline mode, so this is gated on having a
-        // network at all rather than on the streaming preference — offline
-        // it is a guaranteed-to-fail request that wakes the radio.
+        // Warm up music.youtube.com TLS + DNS after initial launch
         applicationScope.launch {
+            delay(2500L)
             // Battery Saver: the first search pays its own handshake instead.
             if (saverAtStart || !connectivityMonitor.isConnected()) return@launch
             runCatching {
@@ -587,16 +566,13 @@ class StashApplication : Application(), Configuration.Provider {
                 ).execute().close()
             }
         }
-        // Off the main thread: scheduling reads the job's state first, to
-        // re-enqueue one that has finished (a FAILED periodic job never runs again).
+        // Off the main thread & deferred: periodic workers re-registration
         applicationScope.launch {
+            delay(2000L)
             YtDlpUpdateWorker.schedulePeriodicUpdate(this@StashApplication)
             UpdateCheckWorker.schedulePeriodicCheck(this@StashApplication)
             LoudnessBackfillWorker.schedulePeriodic(this@StashApplication)
-            // Genres of listened artists for Top genres in "Your listening". Not behind the Stash
-            // Mixes switch like TagEnrichmentWorker: listening stats don't depend on mixes.
             ArtistGenreWorker.schedulePeriodic(this@StashApplication)
-            // Your record's taste once a day (nothing without an import): the mixes follow the newest plays
             com.stash.feature.record.taste.RecordTasteWorker.schedule(this@StashApplication)
         }
         // Auto-sync used to be one delayed chain that nothing re-armed, so an
@@ -618,6 +594,7 @@ class StashApplication : Application(), Configuration.Provider {
         // first toggle), the built-in recipes/playlists stay inactive,
         // and Home/Library don't surface them.
         applicationScope.launch {
+            delay(2000L)
             // Before anything below reads the Data saver mirror for a constraint.
             dataSaverMirrored.await()
             val stashMixesEnabled = stashMixPreference.current()
@@ -699,43 +676,32 @@ class StashApplication : Application(), Configuration.Provider {
         if (!saverAtStart) ArtistImageBackfillWorker.enqueueOneTime(this)
         // Followed shared mixes: check on start, at most every 6 h (the worker gates per mix).
         if (!saverAtStart) com.stash.core.data.share.SharedMixFollowWorker.enqueue(this, force = false)
-        // v0.9.11: kick a background sweep that fills in bit-depth +
-        // sample-rate for tracks downloaded before the columns existed.
-        // The flag is set immediately on enqueue (not after success) so
-        // an interrupted worker doesn't re-trigger on every launch — the
-        // manual "Refresh quality info" button in Settings → Library
-        // Health covers any rows that slipped through, and the worker's
-        // own predicate is idempotent.
-        maybeEnqueueQualityBackfill()
-        maybeEnqueueBlocklistIntegrity()
-        applicationScope.launch { maybeEnqueueCanonicalRecompute() }
-        applicationScope.launch { maybeEnqueueDuplicateCleanup() }
-        // Also fire a one-shot check on every cold start so a release pushed
-        // between periodic-worker windows surfaces within seconds of the
-        // next launch — the 24-hour periodic worker alone can leave users
-        // waiting up to 48 hours when Android Doze defers the fire. Not under Battery Saver: the
-        // periodic check still runs, when Android lets it.
-        // Uses manual = true so it runs unconstrained immediately on launch.
-        if (!saverAtStart) UpdateCheckWorker.enqueueOneTimeCheck(this, manual = true)
-        applicationScope.launch { maybeInvalidateArtistCache() }
-        // The pin backfill reads sync_enabled as intent. It leaves mixes alone,
-        // so it can't race the mix-pin cleanup below.
-        applicationScope.launch { maybePinSyncedPlaylists() }
-        applicationScope.launch { maybeClearPreFavoriteMixPins() }
-        applicationScope.launch { maybeHideEmptyYouTubePlaylists() }
-        applicationScope.launch { maybeBackfillCodecsFromExtension() }
-        applicationScope.launch { maybeBackfillTrackAlbums() }
-        applicationScope.launch { maybePurgeRetiredSourceArtifacts() }
-        applicationScope.launch { relabelYouTubeRowsClaimingSpotify() }
-        // One-shot: seed the streaming Wi-Fi quality tier from the user's
-        // current download tier on first run, so existing users' streaming
-        // quality inherits their download choice instead of silently changing.
-        // migrateIfNeeded() is internally idempotent (no-op after first run).
-        applicationScope.launch { streamingQualityPreferences.migrateIfNeeded() }
-        // Data saver: mirror the switch for the callers that can't suspend (worker constraints,
-        // picture sizes) and re-schedule the art/metadata workers whenever it flips. For the app's
-        // lifetime: a read error re-subscribes after a pause instead of ending the collection, so
-        // one DataStore hiccup can't leave the mirror stuck for the session (onSwitch never throws).
+        // Deferred Stage 3: Low-priority one-time legacy database backfills & housekeeping.
+        // Runs sequentially after 3.5s so SQLite locks are never contested during cold start.
+        applicationScope.launch {
+            delay(3500L)
+            maybeEnqueueQualityBackfill()
+            maybeEnqueueBlocklistIntegrity()
+            maybeEnqueueCanonicalRecompute()
+            maybeEnqueueDuplicateCleanup()
+            maybeInvalidateArtistCache()
+            maybePinSyncedPlaylists()
+            maybeClearPreFavoriteMixPins()
+            maybeHideEmptyYouTubePlaylists()
+            maybeBackfillCodecsFromExtension()
+            maybeBackfillTrackAlbums()
+            maybePurgeRetiredSourceArtifacts()
+            relabelYouTubeRowsClaimingSpotify()
+            streamingQualityPreferences.migrateIfNeeded()
+            metadataBackfillScheduler.scheduleIfNeeded()
+            runCatching { lyricsUpgradeTrigger.cancelRetiredAutoRun() }
+                .onFailure {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    Log.w("StashMigration", "retired lyrics upgrade cancel failed", it)
+                }
+        }
+
+        // Data saver: mirror the switch for callers that can't suspend
         applicationScope.launch {
             streamingQualityPreferences.saveData
                 .distinctUntilChanged()
@@ -745,21 +711,6 @@ class StashApplication : Application(), Configuration.Provider {
                     true
                 }
                 .collect { dataSaverBackgroundWork.onSwitch(it) }
-        }
-        // Auto-enqueue the v0.9.35 metadata backfill once per version.
-        // Idempotent (re-installing the same binary does not re-enqueue).
-        applicationScope.launch {
-            metadataBackfillScheduler.scheduleIfNeeded()
-        }
-        // No automatic lyrics walk over the library (owner decision 2026-10-21): the word-synced
-        // upgrade runs only when the user asks (Settings → Playback → Lyrics → "Re-check library",
-        // or Library Health). One left queued by the retired once-per-release pass is cancelled.
-        applicationScope.launch {
-            runCatching { lyricsUpgradeTrigger.cancelRetiredAutoRun() }
-                .onFailure {
-                    if (it is kotlinx.coroutines.CancellationException) throw it
-                    Log.w("StashMigration", "retired lyrics upgrade cancel failed", it)
-                }
         }
 
         // v0.9.30 Path A: AvailabilityCheckWorker + AvailabilityRecheckWorker

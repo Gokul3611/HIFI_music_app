@@ -32,13 +32,13 @@ object CoilConfiguration {
         ImageLoader.Builder(context)
             .memoryCache {
                 MemoryCache.Builder()
-                    .maxSizePercent(context, 0.25)
+                    .maxSizePercent(context, 0.15)
                     .build()
             }
             .diskCache {
                 DiskCache.Builder()
                     .directory(context.cacheDir.resolve("coil").toOkioPath())
-                    .maxSizeBytes(250L * 1024 * 1024)
+                    .maxSizeBytes(150L * 1024 * 1024)
                     .build()
             }
             .components {

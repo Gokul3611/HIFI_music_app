@@ -237,10 +237,11 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Only wire the release signing config if credentials were found.
-            // Otherwise release builds fall back to the debug key for local testing.
-            if (hasReleaseSigning) {
-                signingConfig = signingConfigs.getByName("release")
+            // Wire release signing if credentials found, otherwise fall back to debug key so release builds are signed and runnable
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
             }
         }
         debug {
