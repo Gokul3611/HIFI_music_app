@@ -152,26 +152,26 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/master') || startsWith(github.ref, 'refs/heads/main')
         with:
-          tag_name: v0.9.132
-          name: "Music Hi-Fi v0.9.132"
+          tag_name: v0.9.133
+          name: "Music Hi-Fi v0.9.133"
           body: |
             <!-- stash-app
             Official update from Gokul (Developer). Safe to install!
             - Verified Official Update | Upstream Stash updates are blocked; this is our official verified update, safe to install.
-            - Correct Branding & Repos | Updated all About links to official Gokul3611 repository and rebranded updater strings to Music.
-            - Seamless Music Downloads | Active automatic fallbacks prevent downloads from hanging or failing when Tidal relays are busy.
-            - ESP32 Hi-Fi DAC Streaming | Rate-aware APLL clock switching (44.1 kHz - 192 kHz) and exclusive streaming.
+            - Lockscreen Song Display | Enforced public visibility and displayTitle for full title and artist visibility on lockscreen notifications.
+            - ESP32 Dual-Mode Wi-Fi DAC | Dynamic pop-free switching between 32-bit PCM5102A and 8-bit built-in DAC with TPDF dither, starvation-free FreeRTOS handshake, and dedicated GPIOs.
+            - Clean Architecture | Flattened workspace repository and updated user-facing branding to Music.
             -->
-            ### 🎵 Music Hi-Fi v0.9.132 - Official Verified Update
+            ### 🎵 Music Hi-Fi v0.9.133 - Official Verified Update
 
             > **📢 Notice from Gokul:** This is an official, verified update from our repository. Upstream Stash updates have been blocked to prevent overwriting your installation and data. You can safely install this update directly!
 
             #### 🌟 Highlights & What's New:
-            - **Verified Official Release**: Safe to update directly from the app.
-            - **Repository Links & Branding Fixed**: Updated About page repository links to `https://github.com/Gokul3611/HIFI_music_app` and rebranded update prompts to Music.
-            - **Immediate Cold-Start Check**: Update checks now run unconstrained at startup so available updates surface immediately.
-            - **Seamless Music Downloads**: Automatic fallback to YouTube/JioSaavn when Tidal is busy. Instant retry when tapping download.
-            - **Dynamic Rate-Aware ESP32 DAC Streaming**: Automatically negotiates and switches ESP32 I2S hardware APLL clock on-the-fly (44.1 kHz - 192 kHz) via UDP handshake.
+            - **Lockscreen Notification Song Title Display**: Enforced `VISIBILITY_PUBLIC` and explicit `.setDisplayTitle(title)` so song titles and artists are fully visible on Android secure lockscreen notifications.
+            - **ESP32 Dual-Mode DAC Switching**: Dynamic pop-free switching between external 32-bit PCM5102A and internal built-in DAC with 1-LSB symmetric TPDF dither and mid-scale 1.65V DC silence.
+            - **Starvation-Free Real-Time Audio Engine**: Pause/resume FreeRTOS semaphore handshake, sample-rate adaptive prebuffer watermarks (~40 ms), dynamic write timeouts, and 8-byte frame stream alignment.
+            - **Dedicated Hardware Pinout**: Dedicated GPIO 27 (BCK), GPIO 14 (WS), GPIO 22 (DIN) keeps high-frequency digital clock signals isolated from analog amplifier pins on GPIO 25/26.
+            - **Streamlined Repository & Branding**: Cleaned up unneeded web/worker files, flattened directory structure, and updated user-facing branding to Music.
 
             #### 📦 Download:
             Download `Music.apk` below or tap "Update now" inside the app.
