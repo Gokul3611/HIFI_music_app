@@ -42,6 +42,7 @@ import com.stash.core.data.prefs.TitleButton
 import com.stash.core.data.prefs.NowPlayingPreference
 import com.stash.core.data.prefs.StartTab
 import com.stash.core.model.AlbumColourMode
+import com.stash.core.model.AppIcon
 import com.stash.core.model.ThemeMode
 import com.stash.core.model.UiScale
 import com.stash.core.ui.theme.LocalUiScaleMax
@@ -92,8 +93,11 @@ fun SettingsAppearanceScreen(
     val titleButton by viewModel.titleButton.collectAsStateWithLifecycle()
     val fullArtBlend by viewModel.fullArtBlend.collectAsStateWithLifecycle()
     val albumColours by viewModel.albumColours.collectAsStateWithLifecycle()
+    val appIcon by viewModel.appIcon.collectAsStateWithLifecycle()
     val searchBrowseOn by viewModel.searchBrowseOn.collectAsStateWithLifecycle()
     var titleButtonSheet by rememberSaveable { mutableStateOf(false) }
+    var appIconSheet by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
     // As the display size: the slider moves a draft, stored once on release.
     var draftZoom by remember(fullArtZoom) { mutableFloatStateOf(fullArtZoom) }
 
@@ -140,6 +144,45 @@ fun SettingsAppearanceScreen(
             )
         }
         SettingsGroupCard(rows = theme)
+
+        SettingsSectionLabel(stringResource(R.string.settings_app_icon_section))
+        SettingsGroupCard(
+            rows = listOf(
+                {
+                    SettingsValueRow(
+                        title = stringResource(R.string.settings_app_icon_title),
+                        subtitle = stringResource(R.string.settings_app_icon_subtitle),
+                        value = appIcon.title,
+                        onClick = { appIconSheet = true },
+                    )
+                },
+            ),
+        )
+
+        if (appIconSheet) {
+            val iconChoices = remember {
+                listOf(
+                    SettingsChoice(AppIcon.DEFAULT, "Obsidian Titanium", "Deep obsidian with titanium silver & frosty glow"),
+                    SettingsChoice(AppIcon.EMERALD, "Cyber Emerald", "Audiophile electric neon green"),
+                    SettingsChoice(AppIcon.VIOLET, "Electric Violet", "Vivid cyberpunk purple"),
+                    SettingsChoice(AppIcon.AMBER, "Sunset Amber", "Golden flame and warm ember orange"),
+                    SettingsChoice(AppIcon.SAPPHIRE, "Ocean Sapphire", "Vivid marine blue and cyan"),
+                    SettingsChoice(AppIcon.CRIMSON, "Crimson Ruby", "Deep scarlet ruby red"),
+                    SettingsChoice(AppIcon.GOLD, "Midnight Gold", "Champagne luxury gold"),
+                    SettingsChoice(AppIcon.MONO, "Minimal Mono", "Pure monochrome high-contrast"),
+                )
+            }
+            SettingsChoiceSheet(
+                title = stringResource(R.string.settings_app_icon_sheet_title),
+                choices = iconChoices,
+                selected = appIcon,
+                onSelect = { selectedIcon ->
+                    viewModel.onAppIconChanged(context, selectedIcon)
+                    appIconSheet = false
+                },
+                onDismiss = { appIconSheet = false },
+            )
+        }
 
         SettingsSectionLabel(stringResource(R.string.settings_home_section))
         SettingsGroupCard(
