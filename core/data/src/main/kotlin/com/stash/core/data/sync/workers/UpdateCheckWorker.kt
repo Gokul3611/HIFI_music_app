@@ -27,6 +27,7 @@ import com.stash.core.data.update.AppUpdates
 import com.stash.core.data.update.ReleaseNotes
 import java.io.File
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -229,9 +230,9 @@ class UpdateCheckWorker(
             val tagName = (root["tag_name"] ?: root["version"])?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
                 ?: return giveUpOrRetry(manual)
 
-            val isRollback = (root["rollback"] as? JsonPrimitive)?.contentOrNull == "true" ||
-                (root["force"] as? JsonPrimitive)?.contentOrNull == "true" ||
-                (root["is_rollback"] as? JsonPrimitive)?.contentOrNull == "true"
+            val isRollback = root["rollback"]?.jsonPrimitive?.contentOrNull == "true" ||
+                root["force"]?.jsonPrimitive?.contentOrNull == "true" ||
+                root["is_rollback"]?.jsonPrimitive?.contentOrNull == "true"
             val isNewer = isNewerVersion(tagName, installedVersion)
             val outcome = outcomeFor(isNewer || isRollback)
             val outcomeData = workDataOf(KEY_OUTCOME to outcome, KEY_LATEST_TAG to tagName)
