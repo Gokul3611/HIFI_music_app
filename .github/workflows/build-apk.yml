@@ -4,7 +4,10 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - '**'
+      - master
+  pull_request:
+    branches:
+      - master
 
 permissions:
   contents: write
@@ -140,7 +143,7 @@ jobs:
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/heads/master') || startsWith(github.ref, 'refs/heads/main')
+        if: github.ref == 'refs/heads/master'
         with:
           tag_name: v0.9.134
           name: "Music Hi-Fi v0.9.134"
