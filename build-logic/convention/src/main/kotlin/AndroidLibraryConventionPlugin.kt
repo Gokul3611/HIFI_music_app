@@ -30,6 +30,7 @@ class AndroidLibraryConventionPlugin : Plugin<Project> {
             extensions.configure<KotlinAndroidProjectExtension> {
                 compilerOptions {
                     jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+                    freeCompilerArgs.addAll("-Xbackend-threads=0")
                 }
             }
         }
