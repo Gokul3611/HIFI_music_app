@@ -745,48 +745,6 @@ class StashPlaybackService : MediaLibraryService() {
             }
         })
 
-    private fun ensurePublicNotification(n: android.app.Notification, session: MediaSession) {
-        n.visibility = android.app.Notification.VISIBILITY_PUBLIC
-        val currentItem = session.player.currentMediaItem
-        val title = currentItem?.mediaMetadata?.title?.takeIf { it.isNotBlank() }
-            ?: currentItem?.mediaMetadata?.displayTitle?.takeIf { it.isNotBlank() }
-            ?: session.player.mediaMetadata.title?.takeIf { it.isNotBlank() }
-            ?: session.player.mediaMetadata.displayTitle?.takeIf { it.isNotBlank() }
-            ?: n.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.takeIf { it.isNotBlank() }
-
-        val artist = currentItem?.mediaMetadata?.artist?.takeIf { it.isNotBlank() }
-            ?: session.player.mediaMetadata.artist?.takeIf { it.isNotBlank() }
-            ?: n.extras?.getCharSequence(android.app.Notification.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
-
-        if (!title.isNullOrBlank()) {
-            n.extras?.putCharSequence(android.app.Notification.EXTRA_TITLE, title)
-            if (n.tickerText.isNullOrBlank()) {
-                n.tickerText = title
-            }
-        }
-        if (!artist.isNullOrBlank()) {
-            n.extras?.putCharSequence(android.app.Notification.EXTRA_TEXT, artist)
-        }
-
-        // Setting publicVersion is essential for lockscreen visibility on devices configured with
-        // "Hide sensitive notification content" on lockscreen (or OEM ROMs like Samsung/MIUI/ColorOS).
-        val publicBuilder = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            android.app.Notification.Builder(this, PLAYBACK_NOTIFICATION_CHANNEL_ID)
-        } else {
-            @Suppress("DEPRECATION")
-            android.app.Notification.Builder(this)
-        }
-        publicBuilder.setContentTitle(title)
-            .setContentText(artist)
-            .setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M && n.smallIcon != null) {
-            publicBuilder.setSmallIcon(n.smallIcon)
-        } else {
-            publicBuilder.setSmallIcon(n.icon)
-        }
-        n.publicVersion = publicBuilder.build()
-    }
-
         val audioAttributes = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .setUsage(C.USAGE_MEDIA)
@@ -1064,6 +1022,48 @@ class StashPlaybackService : MediaLibraryService() {
         }
 
         updateCustomLayout()
+    }
+
+    private fun ensurePublicNotification(n: android.app.Notification, session: MediaSession) {
+        n.visibility = android.app.Notification.VISIBILITY_PUBLIC
+        val currentItem = session.player.currentMediaItem
+        val title = currentItem?.mediaMetadata?.title?.takeIf { it.isNotBlank() }
+            ?: currentItem?.mediaMetadata?.displayTitle?.takeIf { it.isNotBlank() }
+            ?: session.player.mediaMetadata.title?.takeIf { it.isNotBlank() }
+            ?: session.player.mediaMetadata.displayTitle?.takeIf { it.isNotBlank() }
+            ?: n.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.takeIf { it.isNotBlank() }
+
+        val artist = currentItem?.mediaMetadata?.artist?.takeIf { it.isNotBlank() }
+            ?: session.player.mediaMetadata.artist?.takeIf { it.isNotBlank() }
+            ?: n.extras?.getCharSequence(android.app.Notification.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
+
+        if (!title.isNullOrBlank()) {
+            n.extras?.putCharSequence(android.app.Notification.EXTRA_TITLE, title)
+            if (n.tickerText.isNullOrBlank()) {
+                n.tickerText = title
+            }
+        }
+        if (!artist.isNullOrBlank()) {
+            n.extras?.putCharSequence(android.app.Notification.EXTRA_TEXT, artist)
+        }
+
+        // Setting publicVersion is essential for lockscreen visibility on devices configured with
+        // "Hide sensitive notification content" on lockscreen (or OEM ROMs like Samsung/MIUI/ColorOS).
+        val publicBuilder = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            android.app.Notification.Builder(this, PLAYBACK_NOTIFICATION_CHANNEL_ID)
+        } else {
+            @Suppress("DEPRECATION")
+            android.app.Notification.Builder(this)
+        }
+        publicBuilder.setContentTitle(title)
+            .setContentText(artist)
+            .setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M && n.smallIcon != null) {
+            publicBuilder.setSmallIcon(n.smallIcon)
+        } else {
+            publicBuilder.setSmallIcon(n.icon)
+        }
+        n.publicVersion = publicBuilder.build()
     }
 
     /** Session-player listener while casting: idleness, the prefetch poll and presence follow the speaker. */
