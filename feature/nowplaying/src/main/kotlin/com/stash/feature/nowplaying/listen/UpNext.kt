@@ -173,14 +173,24 @@ internal class UpNextState(
                 withFrameNanos { }
                 val key = rows.getOrNull(draggedIdx)?.uid ?: continue
                 val layout = listState.layoutInfo
-                val row = layout.visibleItemsInfo.firstOrNull { it.key == key } ?: continue
-                val step = autoScrollStep(
-                    visualTop = row.offset + offsetY,
-                    visualBottom = row.offset + offsetY + row.size,
-                    viewportPx = (layout.viewportEndOffset - layout.viewportStartOffset).toFloat(),
-                    edgePx = edgePx,
-                    maxStepPx = maxStepPx,
-                )
+                val visible = layout.visibleItemsInfo
+                val firstVisible = visible.firstOrNull()?.index ?: 0
+                val lastVisible = visible.lastOrNull()?.index ?: rows.lastIndex
+                val row = visible.firstOrNull { it.key == key }
+                val step = when {
+                    draggedIdx < firstVisible -> -maxStepPx
+                    draggedIdx > lastVisible -> maxStepPx
+                    row != null -> {
+                        autoScrollStep(
+                            visualTop = row.offset + offsetY,
+                            visualBottom = row.offset + offsetY + row.size,
+                            viewportPx = (layout.viewportEndOffset - layout.viewportStartOffset).toFloat(),
+                            edgePx = edgePx,
+                            maxStepPx = maxStepPx,
+                        )
+                    }
+                    else -> 0f
+                }
                 if (step != 0f) {
                     offsetY += listState.scrollBy(step) // what actually moved: nothing at the list's ends
                     normalize()
@@ -216,11 +226,14 @@ internal class UpNextState(
     private fun swap(dir: Int) {
         val from = draggedIdx
         val to = from + dir
-        // LazyColumn keeps the first visible row where it is when rows move, so a swap involving it would
-        // scroll the list under the finger; asking for the current position keeps it still.
-        val first = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.key
-        if (first == rows[from].uid || first == rows[to].uid) {
-            listState.requestScrollToItem(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+        val firstIdx = listState.firstVisibleItemIndex
+        if (to <= firstIdx) {
+            listState.requestScrollToItem(to.coerceAtLeast(0), 0)
+        } else {
+            val first = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.key
+            if (first == rows[from].uid || first == rows[to].uid) {
+                listState.requestScrollToItem(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+            }
         }
         Collections.swap(rows, from, to)
         draggedIdx = to

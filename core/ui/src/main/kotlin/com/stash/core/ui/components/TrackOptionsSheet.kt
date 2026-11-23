@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.PlaylistPlay
@@ -78,6 +79,7 @@ fun TrackOptionsSheet(
     onStartRadio: ((Track) -> Unit)? = null,
     onShare: ((Track) -> Unit)? = null,
     onViewAlbum: ((Track) -> Unit)? = null,
+    onOpenEqualizer: (() -> Unit)? = null,
     onDownload: ((Track) -> Unit)? = null,
     onRemoveDownload: ((Track) -> Unit)? = null,
     onDelete: ((Track) -> Unit)? = null,
@@ -237,6 +239,18 @@ fun TrackOptionsSheet(
                 icon = Icons.Default.Album,
                 label = "View Album",
                 onClick = { onViewAlbum(track) },
+            )
+        }
+
+        // -- Equalizer option --
+        if (onOpenEqualizer != null) {
+            SheetOptionRow(
+                icon = Icons.Default.GraphicEq,
+                label = "Equalizer",
+                onClick = {
+                    onDismiss()
+                    onOpenEqualizer()
+                },
             )
         }
 

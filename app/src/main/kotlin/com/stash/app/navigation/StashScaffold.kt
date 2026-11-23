@@ -522,6 +522,10 @@ fun StashScaffold(
                 popUpTo<FailedMatchesRoute> { inclusive = true }
             }
         },
+        onOpenEqualizer = {
+            playerSheet.collapse()
+            navController.navigate(EqualizerRoute)
+        },
     )
 
     // Above the player too: a heads-up shows over Now Playing, above the system bar there, and
@@ -559,7 +563,13 @@ fun StashScaffold(
 
     // Up next from the mini player: the same queue sheet Now Playing opens, over this screen.
     if (showQueue) {
-        PlayerQueueSheet(onDismiss = { showQueue = false })
+        PlayerQueueSheet(
+            onDismiss = { showQueue = false },
+            onOpenEqualizer = {
+                showQueue = false
+                navController.navigate(EqualizerRoute)
+            },
+        )
     }
     }
     }
