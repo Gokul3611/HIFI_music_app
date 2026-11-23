@@ -20,6 +20,7 @@ import com.stash.feature.settings.components.SettingsSectionLabel
 import com.stash.feature.settings.components.SettingsInfoRow
 import com.stash.feature.settings.components.SettingsNavRow
 import com.stash.feature.settings.components.SettingsGroupCard
+import com.stash.feature.settings.components.ForkChangesDialog
 
 /** Stash's source, where the GitHub star is. */
 internal const val STASH_GITHUB_URL = "https://github.com/Gokul3611/HIFI_music_app"
@@ -63,7 +64,9 @@ fun SettingsAboutScreen(
         // work and say what it concluded.
         var checking by remember { mutableStateOf(false) }
         var showNotices by remember { mutableStateOf(false) }
+        var showForkChanges by remember { mutableStateOf(false) }
         if (showNotices) OpenSourceNoticesDialog(onDismiss = { showNotices = false })
+        if (showForkChanges) ForkChangesDialog(onDismiss = { showForkChanges = false })
         // A check that finds an update opens the update sheet (over the app, held by the scaffold).
         val updates: com.stash.feature.settings.update.UpdateAskViewModel = androidx.hilt.navigation.compose.hiltViewModel()
         LaunchedEffect(context) {
@@ -94,6 +97,13 @@ fun SettingsAboutScreen(
         SettingsGroupCard(
             rows = listOf(
                 { SettingsInfoRow(label = stringResource(R.string.settings_version_label), value = installedVersion) },
+                {
+                    SettingsNavRow(
+                        title = stringResource(R.string.settings_about_fork_changes),
+                        subtitle = stringResource(R.string.settings_about_fork_changes_detail),
+                        onClick = { showForkChanges = true },
+                    )
+                },
                 { SettingsInfoRow(label = stringResource(R.string.settings_license_label), value = "GPL-3.0") },
                 {
                     // The Support card also has a small "Star" beside Donate again (2026-11-04). This row stays: it

@@ -152,6 +152,7 @@ internal fun settingsSearchIndex(s: (Int) -> String): List<SettingsSearchEntry> 
         SettingsSearchEntry(s(R.string.settings_open_stash_on_section), SettingsPage.APPEARANCE, listOf("start tab", "launch", "startup")),
         SettingsSearchEntry(s(R.string.settings_language_title), SettingsPage.APPEARANCE, listOf("locale", "translation", "translate")),
         // About & Help
+        SettingsSearchEntry(s(R.string.settings_about_fork_changes), SettingsPage.ABOUT, listOf("fork", "stash", "changes", "changelog", "features", "esp32", "what's new", "improvements", "bug fixes")),
         SettingsSearchEntry(s(R.string.settings_check_updates), SettingsPage.ABOUT, listOf("update", "version", "new version")),
         SettingsSearchEntry(s(R.string.settings_share_diagnostics_bundle), SettingsPage.ABOUT, listOf("logs", "bug", "report", "problem")),
         SettingsSearchEntry(s(R.string.settings_share_latest_crash), SettingsPage.ABOUT, listOf("crash", "bug")),
