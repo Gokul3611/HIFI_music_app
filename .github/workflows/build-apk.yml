@@ -5,9 +5,12 @@ on:
   push:
     branches:
       - master
+      - feature/spotify-sync-onboarding-prompt
+      - feature/custom-app-icons
   pull_request:
     branches:
       - master
+      - feature/custom-app-icons
 
 permissions:
   contents: write
@@ -22,24 +25,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          df -h
-
-      - name: Configure Swap Space (Prevent OOM Killer)
-        run: |
-          sudo swapoff -a || true
-          sudo rm -f /swapfile || true
-          sudo fallocate -l 4G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
-          free -h
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -48,22 +33,21 @@ jobs:
 
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
 
       - name: Fix gradlew permissions
         run: chmod +x gradlew
 
-      - name: Cache Android NDK
-        id: cache-ndk
-        uses: actions/cache@v4
-        with:
-          path: /usr/local/lib/android/sdk/ndk/27.0.12077973
-          key: ${{ runner.os }}-ndk-27.0.12077973
-
-      - name: Accept SDK Licenses & Install NDK + CMake
-        if: steps.cache-ndk.outputs.cache-hit != 'true'
+      - name: Ensure Android NDK & CMake
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.0.12077973" "cmake;3.22.1" > /dev/null
+          if [ ! -d "$ANDROID_HOME/ndk/27.0.12077973" ]; then
+            echo "Installing NDK 27.0.12077973 and CMake..."
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.0.12077973" "cmake;3.22.1" > /dev/null
+          else
+            echo "Android NDK 27.0.12077973 is already available at $ANDROID_HOME/ndk/27.0.12077973"
+          fi
 
       - name: Build Release APK
         env:
@@ -71,7 +55,7 @@ jobs:
           LOSSLESS_CONFIG_PUBKEY: "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAELiPYu7/k+TmVCojPEECT2w8tTnoy597StnnmS3vSiPxJ9AtluqhnIinmdknRi+h2ElUzkXYHoJjfzpoLGF46Cg"
         run: |
           set -o pipefail
-          ./gradlew assembleRelease --no-daemon --no-parallel --max-workers=2 --stacktrace 2>&1 | tee android-build.log
+          ./gradlew assembleRelease --parallel --build-cache --stacktrace 2>&1 | tee android-build.log
 
       - name: Surface build failure details
         if: failure()
@@ -141,6 +125,19 @@ jobs:
             dist/Music.apk
           retention-days: 14
 
+      - name: Create or Update Test GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/feature/spotify-sync-onboarding-prompt' || github.ref == 'refs/heads/feature/custom-app-icons'
+        with:
+          tag_name: test-build
+          name: "Music Hi-Fi Test Build (Spotify Sync & Custom Icons)"
+          prerelease: true
+          make_latest: false
+          body: |
+            🧪 **Test Build for Gokul**
+            - Includes Spotify Onboarding Prompt after exploration (~25s) with one-click sign-in redirect
+            - Includes Custom App Icon Picker (Settings > Appearance) with 8 dark minimalist themes
+          files: dist/Music.apk
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/master'
