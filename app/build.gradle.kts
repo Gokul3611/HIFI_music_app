@@ -149,6 +149,11 @@ abstract class SyncDebugNetworkConfigTask : DefaultTask() {
 }
 
 androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        check(variant.applicationId.get() == "com.stash.app") {
+            "CRITICAL: Release applicationId MUST strictly be 'com.stash.app' to prevent duplicate app installs and broken in-app updates! Found: '${variant.applicationId.get()}'"
+        }
+    }
     onVariants(selector().withBuildType("debug")) { variant ->
         val task = tasks.register<SyncDebugNetworkConfigTask>("${variant.name}SyncNetworkConfig") {
             cleartextHost.set(syncDebugCleartextHost.orEmpty())
