@@ -147,11 +147,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/master'
         with:
-          tag_name: v0.9.136
-          name: "Music Hi-Fi v0.9.136"
+          tag_name: v0.9.137
+          name: "Music Hi-Fi v0.9.137"
           body: |
             <!-- stash-app
             Official update from Gokul (Developer). Safe to install!
+            - Package Unification Fix | Restored official applicationId (com.stash.app) so updates seamlessly replace existing app in-place without duplicate installs.
             - Spotify Sync Onboarding | Gentle first-run prompt to sync Spotify playlists and library with 1-tap sign-in redirect.
             - Custom Dynamic App Icons | 8 audiophile-themed dynamic launcher icons with in-app preview sheet (Settings > Appearance).
             - Real-Time Widget Theming | Dynamic launcher widget search icon inheritance and modernized titanium silver widget styling.
@@ -159,11 +160,12 @@ jobs:
             - Queue Drag-to-Top | Fixed viewport boundaries allowing tracks to be dragged smoothly to index 0.
             - Direct Equalizer Access | Equalizer shortcut directly reachable from Now Playing track options and queue menus.
             -->
-            ### 🎵 Music Hi-Fi v0.9.136 - Official Release
+            ### 🎵 Music Hi-Fi v0.9.137 - Official Release
 
-            > **📢 Notice from Gokul:** This release brings custom launcher icon theming, real-time widget updates, Spotify sync onboarding, queue reordering fixes, direct equalizer access, and full lockscreen music info visibility!
+            > **📢 Notice from Gokul:** This release restores the official package identifier (`com.stash.app`), resolving the issue where updates installed as a separate app. You can safely install this update directly over your existing app!
 
             #### 🌟 Highlights & What's New:
+            - **📦 In-Place App Update Fix**: Restored `com.stash.app` package ID so updates install directly over your current app with zero data loss or duplicate icons.
             - **🎨 8 Custom Dynamic App Icons & Visual Picker**: Choose from Obsidian Titanium, Cyber Emerald, Electric Violet, Sunset Amber, Ocean Sapphire, Crimson Ruby, Midnight Gold, or Minimal Mono with live vector-accurate preview thumbnails (**Settings > Appearance > App icon**).
             - **📱 Real-Time Widget Icon & Previews**: Launcher widget search and tray now dynamically inherit the active app icon theme and refresh instantly; widget previews modernized to sleek titanium silver.
             - **🎧 Spotify Sync Onboarding Prompt**: First-run gentle prompt appearing after initial app exploration (~25 seconds) offering a one-click redirect to Spotify library sync.

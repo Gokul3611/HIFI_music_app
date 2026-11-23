@@ -161,11 +161,11 @@ android {
     namespace = "com.stash.app"
     compileSdk = 35
     defaultConfig {
-        applicationId = "com.stash.app.debug"
+        applicationId = "com.stash.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 172
-        versionName = "0.9.136"
+        versionCode = 173
+        versionName = "0.9.137"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Cloud storage sign-in. OneDrive redirects to `${applicationId}://oauth/onedrive` (the
         // data:cloud manifest declares it, so debug and release each get their own); Dropbox to
@@ -245,6 +245,7 @@ android {
             }
         }
         debug {
+            applicationIdSuffix = ".debug"
             buildConfigField("String", "SYNC_BASE_URL", "\"$syncDebugBaseUrl\"")
             buildConfigField("Boolean", "WEB_LINK_ENABLED", "false")
             manifestPlaceholders["webLinkEnabled"] = "false"
