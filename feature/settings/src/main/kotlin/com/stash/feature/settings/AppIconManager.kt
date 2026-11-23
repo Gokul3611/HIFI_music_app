@@ -1,7 +1,9 @@
 package com.stash.feature.settings
 
+import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import com.stash.core.model.AppIcon
 
@@ -18,26 +20,62 @@ object AppIconManager {
         val pm = context.packageManager
         val packageName = context.packageName
 
-        for (icon in AppIcon.entries) {
-            val componentName = ComponentName(packageName, icon.aliasName)
-            val desiredState = if (icon == targetIcon) {
-                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-            } else {
-                PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-            }
-
+        // 1. Enable the new target alias first so the app always has at least one active launcher entry
+        val targetCandidates = listOf(
+            ComponentName(packageName, targetIcon.aliasName),
+            ComponentName(packageName, "$packageName.MainActivityAlias${targetIcon.aliasSuffix}"),
+        )
+        for (targetComponent in targetCandidates) {
             try {
-                val currentState = pm.getComponentEnabledSetting(componentName)
-                if (currentState != desiredState) {
+                pm.setComponentEnabledSetting(
+                    targetComponent,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP,
+                )
+            } catch (_: Exception) {
+            }
+        }
+
+        // 2. Disable all other icon aliases
+        for (icon in AppIcon.entries) {
+            if (icon == targetIcon) continue
+            val candidates = listOf(
+                ComponentName(packageName, icon.aliasName),
+                ComponentName(packageName, "$packageName.MainActivityAlias${icon.aliasSuffix}"),
+            )
+            for (component in candidates) {
+                try {
                     pm.setComponentEnabledSetting(
-                        componentName,
-                        desiredState,
+                        component,
+                        PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                         PackageManager.DONT_KILL_APP,
                     )
+                } catch (_: Exception) {
                 }
-            } catch (_: Exception) {
-                // Ignore if component is unavailable on custom OEM launchers
             }
+        }
+
+        // 3. Broadcast update to AppWidgetManager so home screen widgets and system widget services redraw
+        try {
+            val appWidgetManager = AppWidgetManager.getInstance(context)
+            val receivers = listOf(
+                ComponentName(packageName, "$packageName.widget.NowPlayingWidgetReceiver"),
+                ComponentName(packageName, "com.stash.app.widget.NowPlayingWidgetReceiver"),
+                ComponentName(packageName, "$packageName.widget.NowPlayingSquareWidgetReceiver"),
+                ComponentName(packageName, "com.stash.app.widget.NowPlayingSquareWidgetReceiver"),
+            )
+            for (receiver in receivers) {
+                val ids = appWidgetManager.getAppWidgetIds(receiver)
+                if (ids.isNotEmpty()) {
+                    val updateIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
+                        component = receiver
+                        putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+                    }
+                    context.sendBroadcast(updateIntent)
+                }
+            }
+        } catch (_: Exception) {
         }
     }
 }
+
