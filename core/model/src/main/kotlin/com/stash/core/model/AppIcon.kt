@@ -9,17 +9,19 @@ package com.stash.core.model
 enum class AppIcon(
     val id: String,
     val title: String,
+    val description: String,
     val accentHex: Long,
+    val bgHex: Long,
     val aliasSuffix: String,
 ) {
-    DEFAULT("default", "Obsidian Titanium", 0xFFE2E8F0, "Default"),
-    EMERALD("emerald", "Cyber Emerald", 0xFF00FF87, "Emerald"),
-    VIOLET("violet", "Electric Violet", 0xFFA855F7, "Violet"),
-    AMBER("amber", "Sunset Amber", 0xFFF59E0B, "Amber"),
-    SAPPHIRE("sapphire", "Ocean Sapphire", 0xFF38BDF8, "Sapphire"),
-    CRIMSON("crimson", "Crimson Ruby", 0xFFF43F5E, "Crimson"),
-    GOLD("gold", "Midnight Gold", 0xFFD97706, "Gold"),
-    MONO("mono", "Minimal Mono", 0xFFFFFFFF, "Mono");
+    DEFAULT("default", "Obsidian Titanium", "Deep obsidian with titanium silver & frosty glow", 0xFFE2E8F0, 0xFF090A0D, "Default"),
+    EMERALD("emerald", "Cyber Emerald", "Audiophile electric neon green", 0xFF00FF87, 0xFF060F0A, "Emerald"),
+    VIOLET("violet", "Electric Violet", "Vivid cyberpunk purple", 0xFFA855F7, 0xFF0D0714, "Violet"),
+    AMBER("amber", "Sunset Amber", "Golden flame and warm ember orange", 0xFFF59E0B, 0xFF0F0B06, "Amber"),
+    SAPPHIRE("sapphire", "Ocean Sapphire", "Vivid marine blue and cyan", 0xFF38BDF8, 0xFF060C14, "Sapphire"),
+    CRIMSON("crimson", "Crimson Ruby", "Deep scarlet ruby red", 0xFFF43F5E, 0xFF140608, "Crimson"),
+    GOLD("gold", "Midnight Gold", "Champagne luxury gold", 0xFFD97706, 0xFF120B04, "Gold"),
+    MONO("mono", "Minimal Mono", "Pure monochrome high-contrast", 0xFFFFFFFF, 0xFF0A0A0A, "Mono");
 
     val aliasName: String get() = "com.stash.app.MainActivityAlias$aliasSuffix"
 
