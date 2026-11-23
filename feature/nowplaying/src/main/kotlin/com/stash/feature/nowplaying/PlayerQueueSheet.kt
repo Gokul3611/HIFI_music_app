@@ -35,6 +35,7 @@ import com.stash.feature.nowplaying.ui.QueueBottomSheet
 @Composable
 fun PlayerQueueSheet(
     onDismiss: () -> Unit,
+    onOpenEqualizer: (() -> Unit)? = null,
     viewModel: NowPlayingViewModel = hiltViewModel(),
     listen: ListenTogetherViewModel = hiltViewModel(),
     cast: com.stash.feature.nowplaying.cast.CastViewModel = hiltViewModel(),
@@ -82,6 +83,7 @@ fun PlayerQueueSheet(
             onShare = { track -> shareRequested = viewModel.onShareTrack(track) },
             onToggleDownload = viewModel::toggleDownload,
             onRestoreTrack = viewModel::onRestoreToQueue,
+            onOpenEqualizer = onOpenEqualizer?.let { cb -> { onDismiss(); cb() } },
             // A browser plays the queue (Remote v2 §6): its name in the header, songs only here dimmed.
             playingOn = playOn.browser?.name,
             phoneOnly = if (playOn.onBrowser) remember(phoneOnlyIds) { { track: com.stash.core.model.Track -> track.id in phoneOnlyIds } } else null,

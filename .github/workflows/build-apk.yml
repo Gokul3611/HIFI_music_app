@@ -136,9 +136,10 @@ jobs:
           body: |
             🧪 **Test Build for Gokul**
             - Includes Spotify Onboarding Prompt after exploration (~25s) with one-click sign-in redirect
-            - Includes Custom App Icon Picker (Settings > Appearance) with 8 dark minimalist themes
+            - Includes Custom App Icon Picker with live visual preview thumbnails (Settings > Appearance)
+            - Fixed Queue Drag-to-Top auto-scrolling across viewports to index 0
+            - Equalizer directly accessible from Now Playing "Track Options" sheet
           files: dist/Music.apk
-
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/master'

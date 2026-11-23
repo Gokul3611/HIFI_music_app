@@ -161,6 +161,7 @@ fun NowPlayingScreen(
     onNavigateToArtist: (id: String, name: String, avatarUrl: String?, focusAlbum: String?) -> Unit,
     onNavigateToAlbum: (albumId: String, name: String, artUrl: String?, artistName: String) -> Unit,
     onFixMatch: (trackId: Long) -> Unit,
+    onOpenEqualizer: () -> Unit = {},
     viewModel: NowPlayingViewModel = hiltViewModel(),
     sheet: PlayerSheetState? = null,
 ) {
@@ -460,6 +461,10 @@ fun NowPlayingScreen(
             onShare = { t -> shareRequested = viewModel.onShareTrack(t) },
             onToggleDownload = viewModel::toggleDownload,
             onRestoreTrack = viewModel::onRestoreToQueue,
+            onOpenEqualizer = {
+                showQueue = false
+                onOpenEqualizer()
+            },
             // A browser plays the queue (Remote v2 §6): its name in the header, songs only here dimmed.
             playingOn = playOn.browser?.name,
             phoneOnly = if (playOn.onBrowser) remember(phoneOnlyIds) { { track: com.stash.core.model.Track -> track.id in phoneOnlyIds } } else null,
@@ -689,6 +694,10 @@ fun NowPlayingScreen(
                 NowPlayingAction.VIEW_ALBUM -> viewModel.onViewAlbumTapped()
                 NowPlayingAction.PLAYBACK_SPEED -> showSpeedSheet = true
                 NowPlayingAction.STREAM_QUALITY -> showQualitySheet = true
+                NowPlayingAction.EQUALIZER -> {
+                    showOptionsSheet = false
+                    onOpenEqualizer()
+                }
                 // The ⋮ menu's labelled "Download" / "Remove download" row.
                 NowPlayingAction.DOWNLOAD -> viewModel.toggleDownloadForCurrentTrack()
                 NowPlayingAction.FLAG_WRONG_MATCH -> showWrongMatchDialog = true

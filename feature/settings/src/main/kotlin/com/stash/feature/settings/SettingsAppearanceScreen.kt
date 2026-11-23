@@ -46,6 +46,11 @@ import com.stash.core.model.AppIcon
 import com.stash.core.model.ThemeMode
 import com.stash.core.model.UiScale
 import com.stash.core.ui.theme.LocalUiScaleMax
+import com.stash.core.ui.theme.StashTheme
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material3.Icon
+import com.stash.feature.settings.components.AppIconPickerSheet
+import com.stash.feature.settings.components.AppIconThumbnail
 import com.stash.feature.settings.components.SettingsChoice
 import com.stash.feature.settings.components.SettingsChoiceSheet
 import com.stash.feature.settings.components.SettingsGroupCard
@@ -149,36 +154,46 @@ fun SettingsAppearanceScreen(
         SettingsGroupCard(
             rows = listOf(
                 {
-                    SettingsValueRow(
-                        title = stringResource(R.string.settings_app_icon_title),
-                        subtitle = stringResource(R.string.settings_app_icon_subtitle),
-                        value = appIcon.title,
-                        onClick = { appIconSheet = true },
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { appIconSheet = true }
+                            .padding(horizontal = SettingsRowPadH, vertical = SettingsRowPadV),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AppIconThumbnail(
+                            icon = appIcon,
+                            size = 40.dp,
+                        )
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.settings_app_icon_title),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = appIcon.title,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Rounded.ChevronRight,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = StashTheme.extendedColors.textTertiary,
+                        )
+                    }
                 },
             ),
         )
 
         if (appIconSheet) {
-            val iconChoices = remember {
-                listOf(
-                    SettingsChoice(AppIcon.DEFAULT, "Obsidian Titanium", "Deep obsidian with titanium silver & frosty glow"),
-                    SettingsChoice(AppIcon.EMERALD, "Cyber Emerald", "Audiophile electric neon green"),
-                    SettingsChoice(AppIcon.VIOLET, "Electric Violet", "Vivid cyberpunk purple"),
-                    SettingsChoice(AppIcon.AMBER, "Sunset Amber", "Golden flame and warm ember orange"),
-                    SettingsChoice(AppIcon.SAPPHIRE, "Ocean Sapphire", "Vivid marine blue and cyan"),
-                    SettingsChoice(AppIcon.CRIMSON, "Crimson Ruby", "Deep scarlet ruby red"),
-                    SettingsChoice(AppIcon.GOLD, "Midnight Gold", "Champagne luxury gold"),
-                    SettingsChoice(AppIcon.MONO, "Minimal Mono", "Pure monochrome high-contrast"),
-                )
-            }
-            SettingsChoiceSheet(
-                title = stringResource(R.string.settings_app_icon_sheet_title),
-                choices = iconChoices,
-                selected = appIcon,
+            AppIconPickerSheet(
+                currentIcon = appIcon,
                 onSelect = { selectedIcon ->
                     viewModel.onAppIconChanged(context, selectedIcon)
-                    appIconSheet = false
                 },
                 onDismiss = { appIconSheet = false },
             )

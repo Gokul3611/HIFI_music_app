@@ -128,6 +128,7 @@ fun QueueBottomSheet(
     onSaveToPlaylist: ((Track) -> Unit)? = null,
     onShare: ((Track) -> Unit)? = null,
     onToggleDownload: ((Track) -> Unit)? = null,
+    onOpenEqualizer: (() -> Unit)? = null,
     /**
      * Puts a song swiped out of Up next back at its row ([index] as [onRemoveTrack] took it): the
      * Undo on the "Removed <title>" snackbar each removal shows. Null = no snackbar.
@@ -268,7 +269,9 @@ fun QueueBottomSheet(
                 val from = draggedIdx
                 val to = from + dir
                 val first = listState.firstVisibleItemIndex
-                if (from == first || to == first) {
+                if (to <= first) {
+                    listState.requestScrollToItem(to.coerceAtLeast(0), 0)
+                } else if (from == first) {
                     listState.requestScrollToItem(first, listState.firstVisibleItemScrollOffset)
                 }
                 Collections.swap(localQueue, from, to)
@@ -521,18 +524,26 @@ fun QueueBottomSheet(
                                                     while (isActive) {
                                                         withFrameNanos { }
                                                         val layout = listState.layoutInfo
-                                                        val dragged = layout.visibleItemsInfo
-                                                            .firstOrNull { it.index == draggedIdx }
-                                                            ?: continue
-                                                        val viewportPx = (layout.viewportEndOffset -
-                                                            layout.viewportStartOffset).toFloat()
-                                                        val step = autoScrollStep(
-                                                            visualTop = dragged.offset + dragOffsetY,
-                                                            visualBottom = dragged.offset + dragOffsetY + dragged.size,
-                                                            viewportPx = viewportPx,
-                                                            edgePx = edgePx,
-                                                            maxStepPx = maxStepPx,
-                                                        )
+                                                        val visible = layout.visibleItemsInfo
+                                                        val firstVisible = visible.firstOrNull()?.index ?: 0
+                                                        val lastVisible = visible.lastOrNull()?.index ?: localQueue.lastIndex
+                                                        val dragged = visible.firstOrNull { it.index == draggedIdx }
+                                                        val step = when {
+                                                            draggedIdx < firstVisible -> -maxStepPx
+                                                            draggedIdx > lastVisible -> maxStepPx
+                                                            dragged != null -> {
+                                                                val viewportPx = (layout.viewportEndOffset -
+                                                                    layout.viewportStartOffset).toFloat()
+                                                                autoScrollStep(
+                                                                    visualTop = dragged.offset + dragOffsetY,
+                                                                    visualBottom = dragged.offset + dragOffsetY + dragged.size,
+                                                                    viewportPx = viewportPx,
+                                                                    edgePx = edgePx,
+                                                                    maxStepPx = maxStepPx,
+                                                                )
+                                                            }
+                                                            else -> 0f
+                                                        }
                                                         if (step != 0f) {
                                                             // scrollBy returns what actually moved —
                                                             // at the list bounds it tapers to zero.
@@ -633,6 +644,7 @@ fun QueueBottomSheet(
                 onShare = onShare?.let { cb -> { track: Track -> cb(track); menuTrack = null } },
                 onDownload = onToggleDownload?.let { cb -> { track: Track -> cb(track); menuTrack = null } },
                 onRemoveDownload = onToggleDownload?.let { cb -> { track: Track -> cb(track); menuTrack = null } },
+                onOpenEqualizer = onOpenEqualizer?.let { cb -> { menuTrack = null; cb() } },
             )
         }
     }

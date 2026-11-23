@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -167,6 +168,7 @@ internal fun actionVisual(action: NowPlayingAction, s: ActionVisualState, pinned
     )
     // Opens the sheet with the streaming switches from Settings; the switches show their state.
     NowPlayingAction.STREAM_QUALITY -> ActionVisual(Icons.Default.HighQuality, "Streaming quality")
+    NowPlayingAction.EQUALIZER -> ActionVisual(Icons.Default.GraphicEq, "Equalizer")
     NowPlayingAction.DOWNLOAD -> ActionVisual(
         if (s.isDownloaded) Icons.Default.DownloadDone else Icons.Default.Download,
         when {
@@ -194,6 +196,7 @@ internal fun editorLabel(action: NowPlayingAction): String = when (action) {
     NowPlayingAction.VIEW_ALBUM -> "View Album"
     NowPlayingAction.PLAYBACK_SPEED -> "Playback speed"
     NowPlayingAction.STREAM_QUALITY -> "Streaming quality"
+    NowPlayingAction.EQUALIZER -> "Equalizer"
     NowPlayingAction.DOWNLOAD -> "Download"
     NowPlayingAction.FLAG_WRONG_MATCH -> "Flag as Wrong Match"
 }

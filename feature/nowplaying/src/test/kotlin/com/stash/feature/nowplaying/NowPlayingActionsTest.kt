@@ -3,6 +3,7 @@ package com.stash.feature.nowplaying
 import com.stash.core.data.prefs.NowPlayingAction
 import com.stash.core.data.prefs.NowPlayingAction.CAST
 import com.stash.core.data.prefs.NowPlayingAction.DOWNLOAD
+import com.stash.core.data.prefs.NowPlayingAction.EQUALIZER
 import com.stash.core.data.prefs.NowPlayingAction.FLAG_WRONG_MATCH
 import com.stash.core.data.prefs.NowPlayingAction.LISTEN_TOGETHER
 import com.stash.core.data.prefs.NowPlayingAction.LYRICS
@@ -43,7 +44,7 @@ class NowPlayingActionsTest {
 
     @Test fun `default menu keeps the old items in their old order, with Lyrics first`() {
         assertEquals(
-            listOf(LYRICS, LISTEN_TOGETHER, SAVE_TO_PLAYLIST, SHARE, VIEW_ALBUM, PLAYBACK_SPEED, DOWNLOAD, FLAG_WRONG_MATCH),
+            listOf(LYRICS, LISTEN_TOGETHER, SAVE_TO_PLAYLIST, SHARE, VIEW_ALBUM, PLAYBACK_SPEED, EQUALIZER, DOWNLOAD, FLAG_WRONG_MATCH),
             menuActions(NowPlayingAction.DefaultPins, solo),
         )
     }
@@ -102,7 +103,7 @@ class NowPlayingActionsTest {
 
     @Test fun `Streaming quality is a menu row right after Speed while songs stream`() {
         assertEquals(
-            listOf(LYRICS, LISTEN_TOGETHER, SAVE_TO_PLAYLIST, SHARE, VIEW_ALBUM, PLAYBACK_SPEED, STREAM_QUALITY, DOWNLOAD, FLAG_WRONG_MATCH),
+            listOf(LYRICS, LISTEN_TOGETHER, SAVE_TO_PLAYLIST, SHARE, VIEW_ALBUM, PLAYBACK_SPEED, STREAM_QUALITY, EQUALIZER, DOWNLOAD, FLAG_WRONG_MATCH),
             menuActions(NowPlayingAction.DefaultPins, ActionContext(streams = true)),
         )
     }
