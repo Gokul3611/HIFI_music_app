@@ -221,15 +221,22 @@ fun movedHomeSectionOrder(order: List<HomeSection>, section: HomeSection, to: In
     return withRecordMixesUnderRecord(movable)
 }
 
-/** Home before the preference loads, and when it can't be read: every section but Community, which is opt-in. */
-val DEFAULT_HOME_SECTIONS: List<HomeSection> = effectiveHomeSectionOrder(emptyList(), false) - HomeSection.COMMUNITY
+/** Sections excluded from the Home screen (generic catalogs: new releases from random artists, Qobuz playlists, and global top albums). */
+val EXCLUDED_HOME_SECTIONS = setOf(
+    HomeSection.NEW_RELEASES,
+    HomeSection.QOBUZ_PLAYLISTS,
+    HomeSection.TOP_ALBUMS,
+)
+
+/** Home before the preference loads, and when it can't be read: personalized sections, excluding generic catalog shelves. */
+val DEFAULT_HOME_SECTIONS: List<HomeSection> = (effectiveHomeSectionOrder(emptyList(), false) - HomeSection.COMMUNITY)
+    .filter { it !in EXCLUDED_HOME_SECTIONS }
 
 /**
- * What Home renders: [order] minus [hidden], and minus COMMUNITY unless [communityOn]. Community has its own
- * switch, off by default (spec 2026-09-26 §3), because a section new in an update is otherwise shown.
+ * What Home renders: [order] minus [hidden], minus excluded catalog shelves, and minus COMMUNITY unless [communityOn].
  */
 fun visibleHomeSections(order: List<HomeSection>, hidden: Set<HomeSection>, communityOn: Boolean): List<HomeSection> =
-    order.filter { it !in hidden && (communityOn || it != HomeSection.COMMUNITY) }
+    order.filter { it !in hidden && it !in EXCLUDED_HOME_SECTIONS && (communityOn || it != HomeSection.COMMUNITY) }
 
 /**
  * [order] with COMMUNITY moved up: where it lands the first time it's turned on, directly under the Discover

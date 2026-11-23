@@ -150,13 +150,9 @@ class YourStashUiTest {
         for (u in cases) assertThat(u.backups).containsExactly(BackupShortcut.BACK_UP, BackupShortcut.RESTORE).inOrder()
     }
 
-    @Test fun `what's coming is the three planned pieces, in order, for everyone`() {
+    @Test fun `what's coming is empty`() {
         for (u in listOf(ui(), ui(link = linked(me)), ui(supporter = SupporterRow.Hidden, cloudAvailable = false))) {
-            assertThat(u.coming).containsExactly(
-                YourStashComing.PASSKEY_RECOVERY,
-                YourStashComing.NIGHTLY_BACKUP,
-                YourStashComing.RESTORE_NEW_PHONE,
-            ).inOrder()
+            assertThat(u.coming).isEmpty()
         }
     }
 }

@@ -218,6 +218,9 @@ class StashPlaybackService : MediaLibraryService() {
          */
         const val ACTION_OPEN_PLAYER = "com.stash.action.OPEN_PLAYER"
 
+        /** Dedicated channel ID ensuring VISIBILITY_PUBLIC on lock screen across all Android versions. */
+        const val PLAYBACK_NOTIFICATION_CHANNEL_ID = "stash_playback_channel_v2"
+
         /** Custom command action for toggling shuffle mode. */
         const val COMMAND_TOGGLE_SHUFFLE = "com.stash.TOGGLE_SHUFFLE"
 
@@ -667,8 +670,28 @@ class StashPlaybackService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
 
+        // Dedicated notification channel with VISIBILITY_PUBLIC so lock screen shows song details
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val nm = getSystemService(android.app.NotificationManager::class.java)
+            val channel = android.app.NotificationChannel(
+                PLAYBACK_NOTIFICATION_CHANNEL_ID,
+                getString(androidx.media3.session.R.string.default_notification_channel_name),
+                android.app.NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = "Playback controls and now playing"
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                setShowBadge(false)
+            }
+            nm?.createNotificationChannel(channel)
+        }
+
         // Listen Together: "With Maya +2 · <artist>" while a session runs. Otherwise the stock provider.
-        val baseProvider = object : androidx.media3.session.DefaultMediaNotificationProvider(this) {
+        val baseProvider = object : androidx.media3.session.DefaultMediaNotificationProvider(
+            this,
+            { androidx.media3.session.DefaultMediaNotificationProvider.DEFAULT_NOTIFICATION_ID },
+            PLAYBACK_NOTIFICATION_CHANNEL_ID,
+            androidx.media3.session.R.string.default_notification_channel_name,
+        ) {
             override fun getNotificationContentTitle(metadata: MediaMetadata): CharSequence? {
                 val title = metadata.title?.takeIf { it.isNotBlank() }
                     ?: metadata.displayTitle?.takeIf { it.isNotBlank() }
@@ -686,19 +709,6 @@ class StashPlaybackService : MediaLibraryService() {
                 val together = if (listenTogetherController.active.value) togetherLine(listenTogetherController.state.value) else null
                 return listOfNotNull(together, browser, base).joinToString(" · ")
             }
-        }
-        // Ensure playback notification channel explicitly allows full lockscreen visibility
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            val nm = getSystemService(android.app.NotificationManager::class.java)
-            val channelId = androidx.media3.session.DefaultMediaNotificationProvider.DEFAULT_CHANNEL_ID
-            val existing = nm?.getNotificationChannel(channelId)
-            val channel = existing ?: android.app.NotificationChannel(
-                channelId,
-                getString(androidx.media3.session.R.string.default_notification_channel_name),
-                android.app.NotificationManager.IMPORTANCE_LOW,
-            )
-            channel.lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
-            nm?.createNotificationChannel(channel)
         }
         // Listen Together and casting keep the service in the foreground while paused (onUpdateNotification below), but
         // Media3's MediaNotificationManager.onNotificationUpdated, which runs when artwork finishes loading in the
@@ -720,11 +730,7 @@ class StashPlaybackService : MediaLibraryService() {
             ): androidx.media3.session.MediaNotification {
                 val fromRedirect = redirectingArtwork
                 val mediaNotification = baseProvider.createNotification(mediaSession, mediaButtonPreferences, actionFactory) { n ->
-                    n.notification.visibility = android.app.Notification.VISIBILITY_PUBLIC
-                    val title = n.notification.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)
-                    if (n.notification.tickerText.isNullOrBlank() && !title.isNullOrBlank()) {
-                        n.notification.tickerText = title
-                    }
+                    ensurePublicNotification(n.notification, mediaSession)
                     when {
                         !listenTogetherController.active.value && !isCasting -> onNotificationChangedCallback.onNotificationChanged(n)
                         fromRedirect -> Unit
@@ -734,14 +740,52 @@ class StashPlaybackService : MediaLibraryService() {
                         }
                     }
                 }
-                mediaNotification.notification.visibility = android.app.Notification.VISIBILITY_PUBLIC
-                val title = mediaNotification.notification.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)
-                if (mediaNotification.notification.tickerText.isNullOrBlank() && !title.isNullOrBlank()) {
-                    mediaNotification.notification.tickerText = title
-                }
+                ensurePublicNotification(mediaNotification.notification, mediaSession)
                 return mediaNotification
             }
         })
+
+    private fun ensurePublicNotification(n: android.app.Notification, session: MediaSession) {
+        n.visibility = android.app.Notification.VISIBILITY_PUBLIC
+        val currentItem = session.player.currentMediaItem
+        val title = currentItem?.mediaMetadata?.title?.takeIf { it.isNotBlank() }
+            ?: currentItem?.mediaMetadata?.displayTitle?.takeIf { it.isNotBlank() }
+            ?: session.player.mediaMetadata.title?.takeIf { it.isNotBlank() }
+            ?: session.player.mediaMetadata.displayTitle?.takeIf { it.isNotBlank() }
+            ?: n.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.takeIf { it.isNotBlank() }
+
+        val artist = currentItem?.mediaMetadata?.artist?.takeIf { it.isNotBlank() }
+            ?: session.player.mediaMetadata.artist?.takeIf { it.isNotBlank() }
+            ?: n.extras?.getCharSequence(android.app.Notification.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
+
+        if (!title.isNullOrBlank()) {
+            n.extras?.putCharSequence(android.app.Notification.EXTRA_TITLE, title)
+            if (n.tickerText.isNullOrBlank()) {
+                n.tickerText = title
+            }
+        }
+        if (!artist.isNullOrBlank()) {
+            n.extras?.putCharSequence(android.app.Notification.EXTRA_TEXT, artist)
+        }
+
+        // Setting publicVersion is essential for lockscreen visibility on devices configured with
+        // "Hide sensitive notification content" on lockscreen (or OEM ROMs like Samsung/MIUI/ColorOS).
+        val publicBuilder = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            android.app.Notification.Builder(this, PLAYBACK_NOTIFICATION_CHANNEL_ID)
+        } else {
+            @Suppress("DEPRECATION")
+            android.app.Notification.Builder(this)
+        }
+        publicBuilder.setContentTitle(title)
+            .setContentText(artist)
+            .setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M && n.smallIcon != null) {
+            publicBuilder.setSmallIcon(n.smallIcon)
+        } else {
+            publicBuilder.setSmallIcon(n.icon)
+        }
+        n.publicVersion = publicBuilder.build()
+    }
 
         val audioAttributes = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)

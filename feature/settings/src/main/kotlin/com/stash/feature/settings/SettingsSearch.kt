@@ -101,7 +101,6 @@ internal fun settingsSearchIndex(s: (Int) -> String): List<SettingsSearchEntry> 
         // Lossless sources
         SettingsSearchEntry(s(R.string.settings_lossless_sources_title), SettingsPage.LOSSLESS_SOURCES, listOf("routing", "allowance", "daily limit", "quota", "tidal", "qobuz")),
         SettingsSearchEntry(s(R.string.settings_qobuz_account_title), SettingsPage.LOSSLESS_SOURCES, listOf("sign in", "login", "subscription")),
-        SettingsSearchEntry(s(R.string.settings_supporter_offer), SettingsPage.LOSSLESS_SOURCES, listOf("supporter", "ko fi", "kofi", "unlock", "code", "donate")),
         SettingsSearchEntry(s(R.string.settings_advanced), SettingsPage.LOSSLESS_SOURCES, listOf("relay", "bitchord", "tidal server")),
         // Accounts & Sync
         SettingsSearchEntry("Spotify", SettingsPage.ACCOUNTS, listOf("connect", "sign in", "login")),
@@ -136,8 +135,6 @@ internal fun settingsSearchIndex(s: (Int) -> String): List<SettingsSearchEntry> 
         SettingsSearchEntry(s(R.string.settings_web_link_handoff_title), SettingsPage.YOUR_STASH, listOf("handoff", "continue", "web player")),
         SettingsSearchEntry(s(R.string.settings_mirror_section_title), SettingsPage.YOUR_STASH, listOf("mirror", "web player", "likes", "playlists")),
         SettingsSearchEntry(s(R.string.settings_web_link_send_library_title), SettingsPage.YOUR_STASH, listOf("web player", "export")),
-        SettingsSearchEntry(s(R.string.settings_your_stash_section_supporter), SettingsPage.YOUR_STASH, listOf("ko fi", "kofi", "unlock", "donate")),
-        SettingsSearchEntry(s(R.string.settings_your_stash_section_coming), SettingsPage.YOUR_STASH, listOf("passkey", "recovery", "nightly backup", "new phone", "restore")),
         SettingsSearchEntry(s(R.string.settings_web_link_action_unlink_everything), SettingsPage.YOUR_STASH, listOf("unlink", "disconnect", "web player")),
         SettingsSearchEntry(s(R.string.settings_cloud_folders_section_title), SettingsPage.LIBRARY, listOf("rescan", "dropbox", "onedrive")),
         SettingsSearchEntry(s(R.string.settings_storage_used_label), SettingsPage.LIBRARY, listOf("space", "size")),

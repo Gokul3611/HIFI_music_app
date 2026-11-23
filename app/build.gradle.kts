@@ -220,8 +220,8 @@ android {
     buildTypes {
         release {
             buildConfigField("String", "SYNC_BASE_URL", "\"$syncReleaseBaseUrl\"")
-            buildConfigField("Boolean", "WEB_LINK_ENABLED", "true")
-            manifestPlaceholders["webLinkEnabled"] = "true"
+            buildConfigField("Boolean", "WEB_LINK_ENABLED", "false")
+            manifestPlaceholders["webLinkEnabled"] = "false"
             // ARM only in the release APK. x86/x86_64 were ~71 MB of the universal APK (each ABI
             // carries its own ffmpeg + python zips) for CPUs no phone at minSdk 26 has. This filters
             // the AAR libs as well as app/src/main/jniLibs. Still one Stash.apk, so the in-app updater
@@ -246,8 +246,8 @@ android {
         }
         debug {
             buildConfigField("String", "SYNC_BASE_URL", "\"$syncDebugBaseUrl\"")
-            buildConfigField("Boolean", "WEB_LINK_ENABLED", "true")
-            manifestPlaceholders["webLinkEnabled"] = "true"
+            buildConfigField("Boolean", "WEB_LINK_ENABLED", "false")
+            manifestPlaceholders["webLinkEnabled"] = "false"
             isDebuggable = true
             signingConfig = signingConfigs.getByName("debug")
             if (minifyDebug) {

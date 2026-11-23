@@ -30,7 +30,7 @@ internal data class YourStashUi(
     val supporter: SupporterRow,
     val cloud: YourStashCloud,
     val backups: List<BackupShortcut> = BackupShortcut.entries,
-    val coming: List<YourStashComing> = YourStashComing.entries,
+    val coming: List<YourStashComing> = emptyList(),
 )
 
 /** The Devices section. */

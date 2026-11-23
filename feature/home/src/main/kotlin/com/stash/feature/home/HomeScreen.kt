@@ -518,39 +518,9 @@ fun HomeScreen(
                             }
                         }
                     }
-                HomeSection.NEW_RELEASES -> if (uiState.newReleases.isNotEmpty()) {
-                    item(key = "section_new_releases") {
-                        DiscoveryAlbumRow(
-                            title = stringResource(R.string.home_section_new_releases),
-                            albums = uiState.newReleases,
-                            onOpen = onNavigateToAlbum,
-                            topSpacing = if (chipsLead) 2.dp else 16.dp,
-                        )
-                    }
-                }
-                HomeSection.QOBUZ_PLAYLISTS -> if (uiState.playlists.isNotEmpty()) {
-                    item(key = "section_qobuz_playlists") {
-                        DiscoveryPlaylistRow(
-                            title = stringResource(R.string.home_section_qobuz_playlists),
-                            playlists = uiState.playlists,
-                            onOpen = onNavigateToAlbum,
-                            onSeeAll = { onSeeAllPlaylists(uiState.selectedGenre) },
-                            topSpacing = if (chipsLead) 2.dp else 16.dp,
-                        )
-                    }
-                }
-                HomeSection.TOP_ALBUMS -> if (uiState.topAlbums.isNotEmpty()) {
-                    item(key = "section_top_albums") {
-                        // The same cover rail as New Releases (owner, 2026-10-22): the ranked
-                        // list showed no covers.
-                        DiscoveryAlbumRow(
-                            title = stringResource(R.string.home_section_top_albums),
-                            albums = uiState.topAlbums,
-                            onOpen = onNavigateToAlbum,
-                            topSpacing = if (chipsLead) 2.dp else 16.dp,
-                        )
-                    }
-                }
+                HomeSection.NEW_RELEASES,
+                HomeSection.QOBUZ_PLAYLISTS,
+                HomeSection.TOP_ALBUMS -> Unit
                 HomeSection.MADE_FOR_YOU -> if (uiState.madeForYou.isNotEmpty()) {
                     item(key = "section_made_for_you") {
                         CardRail(

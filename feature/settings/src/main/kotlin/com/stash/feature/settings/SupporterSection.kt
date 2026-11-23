@@ -59,7 +59,7 @@ internal fun SupporterSection(viewModel: SupporterViewModel = hiltViewModel()) {
     var open by rememberSaveable { mutableStateOf(false) }
 
     when (val r = row) {
-        SupporterRow.Hidden -> return
+        SupporterRow.Hidden, is SupporterRow.Offer -> return
         is SupporterRow.Supporter -> Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -72,26 +72,6 @@ internal fun SupporterSection(viewModel: SupporterViewModel = hiltViewModel()) {
             )
             // Only when this device holds the code (a supporter elsewhere has nothing to remove).
             if (r.hasToken) TextButton(onClick = viewModel::removeCode) { Text(stringResource(R.string.settings_supporter_remove_from_device)) }
-        }
-        is SupporterRow.Offer -> Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 40.dp)
-                .clickable(role = Role.Button) { open = true },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(R.string.settings_supporter_offer),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(1f),
-            )
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = StashTheme.extendedColors.textTertiary,
-                modifier = Modifier.size(20.dp),
-            )
         }
     }
 

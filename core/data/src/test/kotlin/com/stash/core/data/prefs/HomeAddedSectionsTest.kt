@@ -24,6 +24,9 @@ class HomeAddedSectionsTest {
         assertEquals(order.indexOf(HomeSection.NEW_RELEASES) - 1, order.indexOf(HomeSection.NEW_FROM_ARTISTS))
         assertTrue(order.indexOf(HomeSection.YOUR_PLAYLISTS) < order.indexOf(HomeSection.NEW_FROM_ARTISTS))
         assertTrue(HomeSection.NEW_FROM_ARTISTS in DEFAULT_HOME_SECTIONS)
+        assertFalse(HomeSection.NEW_RELEASES in DEFAULT_HOME_SECTIONS)
+        assertFalse(HomeSection.QOBUZ_PLAYLISTS in DEFAULT_HOME_SECTIONS)
+        assertFalse(HomeSection.TOP_ALBUMS in DEFAULT_HOME_SECTIONS)
         assertEquals(HomeSection.entries.size, order.toSet().size)
     }
 

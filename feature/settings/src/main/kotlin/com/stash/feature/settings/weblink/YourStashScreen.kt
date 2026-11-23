@@ -162,10 +162,8 @@ fun YourStashScreen(
                     mirror = { MirrorSection(mirror, mirrorVm) },
                 )
             }
-            SupporterSection(ui.supporter, onClaim = { claimOpen = true })
             CloudSection(ui.cloud, onOpenCloud)
             BackupsSection(ui.backups, onBackupShortcut)
-            ComingSection(ui.coming)
             if (ui.linkFeatures != null) UnlinkSection(busy, onUnlinkAll = { unlinkAll = true })
         }
         if (scanning) {
@@ -173,9 +171,6 @@ fun YourStashScreen(
             QrScannerScreen(onCode = viewModel::openLink, onClose = viewModel::stopScan)
         }
     }
-
-    // The Ko-fi claim, the same sheet Lossless sources opens (supporterVm holds the claim's steps).
-    SupporterClaim(supporterVm, ui.supporter, claimOpen, onClose = { claimOpen = false })
 
     // Send my library to a browser: the export picker (Save as file is there too), and a received send's choices.
     WebLibraryExportSheet(exportVm)
@@ -278,23 +273,13 @@ private fun DevicesSection(
     when (devices) {
         YourStashDevices.Loading -> LinearProgressIndicator(Modifier.fillMaxWidth())
         YourStashDevices.ThisPhoneOnly -> if (pairingIdle) {
-            val linkSubtitle = stringResource(R.string.settings_web_link_nav_subtitle) + "\n" +
-                stringResource(R.string.settings_web_link_not_linked_instructions)
             SettingsGroupCard(
                 rows = listOf(
                     {
                         StaticRow(
                             icon = Icons.Outlined.PhoneAndroid,
                             title = stringResource(R.string.settings_web_link_device_this_phone),
-                            subtitle = stringResource(R.string.settings_your_stash_no_browser_yet),
-                        )
-                    },
-                    {
-                        SettingsNavRow(
-                            title = stringResource(R.string.settings_web_link_nav_title),
-                            subtitle = linkSubtitle,
-                            leadingIcon = Icons.Outlined.QrCodeScanner,
-                            onClick = onScan,
+                            subtitle = null,
                         )
                     },
                 ),
@@ -395,34 +380,7 @@ private fun LinkFeatures(
     }
 }
 
-/**
- * Supporter: the Ko-fi claim's state as Lossless sources shows it. Not claimed: the existing claim sheet. Claimed: says so
- * (removing the code stays on Lossless sources). No section when no owner relay is configured: there is nothing to lift.
- */
-@Composable
-private fun SupporterSection(row: SupporterRow, onClaim: () -> Unit) {
-    if (row == SupporterRow.Hidden) return
-    SettingsSectionLabel(stringResource(R.string.settings_your_stash_section_supporter))
-    SettingsGroupCard(
-        rows = listOf {
-            when (row) {
-                is SupporterRow.Offer -> SettingsNavRow(
-                    title = stringResource(R.string.settings_supporter_offer),
-                    subtitle = stringResource(R.string.settings_your_stash_supporter_offer_subtitle),
-                    leadingIcon = Icons.Outlined.FavoriteBorder,
-                    onClick = onClaim,
-                )
-                is SupporterRow.Supporter -> StaticRow(
-                    icon = Icons.Outlined.Favorite,
-                    title = stringResource(R.string.settings_supporter_active),
-                    subtitle = if (row.hasToken) stringResource(R.string.settings_your_stash_supporter_code_here) else null,
-                    titleColor = StashTheme.extendedColors.success,
-                )
-                SupporterRow.Hidden -> Unit
-            }
-        },
-    )
-}
+
 
 /**
  * Cloud: the user's own cloud accounts, signed in on this phone (no Stash identity). Every row opens Accounts & Sync at
@@ -498,40 +456,7 @@ private fun BackupsSection(backups: List<BackupShortcut>, onBackupShortcut: (Bac
     )
 }
 
-/** What's coming: D21's later phases, worded as future, no dates, nothing to tap. */
-@Composable
-private fun ComingSection(coming: List<YourStashComing>) {
-    SettingsSectionLabel(stringResource(R.string.settings_your_stash_section_coming))
-    SettingsGroupCard(
-        rows = coming.map { item ->
-            @Composable {
-                when (item) {
-                    YourStashComing.PASSKEY_RECOVERY -> StaticRow(
-                        icon = Icons.Outlined.Key,
-                        title = stringResource(R.string.settings_your_stash_coming_passkey_title),
-                        subtitle = stringResource(R.string.settings_your_stash_coming_passkey_desc),
-                    )
-                    YourStashComing.NIGHTLY_BACKUP -> StaticRow(
-                        icon = Icons.Outlined.Schedule,
-                        title = stringResource(R.string.settings_your_stash_coming_backup_title),
-                        subtitle = stringResource(R.string.settings_your_stash_coming_backup_desc),
-                    )
-                    YourStashComing.RESTORE_NEW_PHONE -> StaticRow(
-                        icon = Icons.Outlined.SystemUpdate,
-                        title = stringResource(R.string.settings_your_stash_coming_restore_title),
-                        subtitle = stringResource(R.string.settings_your_stash_coming_restore_desc),
-                    )
-                }
-            }
-        },
-    )
-    Text(
-        stringResource(R.string.settings_your_stash_coming_note),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 4.dp),
-    )
-}
+
 
 /** Unlink everything, last on the page as a sign-out is: deletes the space; no library changes. */
 @Composable

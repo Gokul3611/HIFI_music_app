@@ -58,14 +58,8 @@ class YourStashSearchTest {
     @Test fun `the page's rows are findable by their names and their synonyms`() {
         assertThat(search("handoff").map { it.title }).containsExactly("Pick up where you left off")
         assertThat(search("mirror").map { it.title }).contains("Mirror between your devices")
-        assertThat(search("passkey").map { it.title }).containsExactly("What's coming")
-        assertThat(search("new phone").map { it.title }).containsExactly("What's coming")
         assertThat(search("unlink").map { it.title }).containsExactly("Unlink everything")
         assertThat(search("rename").map { it.title }).containsExactly("Devices")
-    }
-
-    @Test fun `supporter finds both the claim on Lossless sources and the row on Your Stash`() {
-        assertThat(search("kofi").map { it.page }).containsAtLeast(SettingsPage.LOSSLESS_SOURCES, SettingsPage.YOUR_STASH)
     }
 
     @Test fun `with the link switched off, Your Stash leaves the index and nothing else does`() {
