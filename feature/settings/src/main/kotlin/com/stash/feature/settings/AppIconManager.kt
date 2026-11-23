@@ -55,16 +55,29 @@ object AppIconManager {
             }
         }
 
-        // 3. Broadcast update to AppWidgetManager so home screen widgets and system widget services redraw
+        // 3. Re-affirm widget receiver state so AppWidgetService and the launcher's widget picker
+        // receive ACTION_PACKAGE_CHANGED for the widget providers, updating the search & picker icons.
+        val widgetReceivers = listOf(
+            ComponentName(packageName, "$packageName.widget.NowPlayingWidgetReceiver"),
+            ComponentName(packageName, "com.stash.app.widget.NowPlayingWidgetReceiver"),
+            ComponentName(packageName, "$packageName.widget.NowPlayingSquareWidgetReceiver"),
+            ComponentName(packageName, "com.stash.app.widget.NowPlayingSquareWidgetReceiver"),
+        )
+        for (receiver in widgetReceivers) {
+            try {
+                pm.setComponentEnabledSetting(
+                    receiver,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP,
+                )
+            } catch (_: Exception) {
+            }
+        }
+
+        // 4. Broadcast update to AppWidgetManager so home screen widgets and system widget services redraw
         try {
             val appWidgetManager = AppWidgetManager.getInstance(context)
-            val receivers = listOf(
-                ComponentName(packageName, "$packageName.widget.NowPlayingWidgetReceiver"),
-                ComponentName(packageName, "com.stash.app.widget.NowPlayingWidgetReceiver"),
-                ComponentName(packageName, "$packageName.widget.NowPlayingSquareWidgetReceiver"),
-                ComponentName(packageName, "com.stash.app.widget.NowPlayingSquareWidgetReceiver"),
-            )
-            for (receiver in receivers) {
+            for (receiver in widgetReceivers) {
                 val ids = appWidgetManager.getAppWidgetIds(receiver)
                 if (ids.isNotEmpty()) {
                     val updateIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {

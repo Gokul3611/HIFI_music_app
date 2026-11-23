@@ -341,8 +341,6 @@
         <receiver
             android:name=".widget.NowPlayingWidgetReceiver"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher"
-            android:roundIcon="@mipmap/ic_launcher_round"
             android:label="@string/widget_now_playing_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -354,8 +352,6 @@
         <receiver
             android:name=".widget.NowPlayingSquareWidgetReceiver"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher"
-            android:roundIcon="@mipmap/ic_launcher_round"
             android:label="@string/widget_now_playing_square_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
