@@ -14,19 +14,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material.icons.rounded.OpenInNew
-import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.Speed
-import androidx.compose.material.icons.rounded.Sync
-import androidx.compose.material.icons.rounded.Wifi
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -35,10 +28,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,8 +38,9 @@ import com.stash.feature.settings.R
 import com.stash.feature.settings.STASH_GITHUB_URL
 
 /**
- * Dialog displaying a breakdown of features, bug fixes, hardware streaming
- * capabilities, and architectural improvements added to this app fork of Stash.
+ * Technical changelog dialog detailing architectural modifications,
+ * hardware streaming extensions, upstream cleanup, and bug fixes
+ * applied to this fork of Stash.
  */
 @Composable
 fun ForkChangesDialog(onDismiss: () -> Unit) {
@@ -58,36 +51,18 @@ fun ForkChangesDialog(onDismiss: () -> Unit) {
         containerColor = MaterialTheme.colorScheme.surface,
         shape = MaterialTheme.shapes.extraLarge,
         title = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.AutoAwesome,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Column {
-                    Text(
-                        text = stringResource(R.string.settings_about_fork_changes_dialog_title),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = stringResource(R.string.settings_about_fork_changes_dialog_subtitle),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = stringResource(R.string.settings_about_fork_changes_dialog_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = stringResource(R.string.settings_about_fork_changes_dialog_subtitle),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         },
         text = {
@@ -95,73 +70,77 @@ fun ForkChangesDialog(onDismiss: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                // Overview banner
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                 ) {
                     Text(
                         text = stringResource(R.string.settings_about_fork_changes_intro),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(12.dp),
-                        lineHeight = 18.sp,
+                        modifier = Modifier.padding(10.dp),
+                        lineHeight = 17.sp,
                     )
                 }
 
-                // Section 1: ESP32 DAC
-                ChangeCategorySection(
-                    icon = Icons.Rounded.Wifi,
-                    title = "ESP32 Hi-Fi Wireless Streaming",
-                    items = listOf(
-                        "Lossless 24-bit & 32-bit / 96kHz PCM streaming directly to ESP32 over Wi-Fi SoftAP / UDP.",
-                        "Dual-mode hardware DAC: instant out-of-band switching between external I2S (PCM5102A) and built-in internal DAC direct to amp.",
-                        "Audiophile stability: anti-jitter prebuffering, symmetric TPDF dither, and lockless ringbuffer memory management.",
-                        "Automatic phone speaker muting during wireless DAC streaming.",
+                TechnicalChangelogSection(
+                    tag = "STREAMING",
+                    title = "ESP32 Wi-Fi DAC Pipeline",
+                    entries = listOf(
+                        "Raw linear PCM streaming over TCP (port 8888) bypassing Android AudioFlinger resampling and Bluetooth SBC/AAC compression.",
+                        "Out-of-band UDP control (port 8889) for runtime DAC mode switching between external I2S (PCM5102A) and internal 8-bit DAC with TPDF dither.",
+                        "SPSC 64 KB ringbuffer with binary semaphore handshake to eliminate FreeRTOS priority inversion and audio DMA underruns.",
+                        "Frame-aligned stream reset (& ~7u) and 0x8000 DC mid-rail bias on underrun to eliminate speaker pop transients.",
+                        "Phone audio sink silenced automatically during active ESP32 Wi-Fi direct playback.",
                     ),
                 )
 
-                // Section 2: Audio & Playback
-                ChangeCategorySection(
-                    icon = Icons.Rounded.GraphicEq,
-                    title = "Audio & Playback Intelligence",
-                    items = listOf(
-                        "Quick Equalizer access directly embedded inside track options and playback menus.",
-                        "Smart local music recommendations with continuous Spotify-like autoplay fallback.",
-                        "Fixed queue reordering glitches when dragging tracks to the very top.",
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                TechnicalChangelogSection(
+                    tag = "PLAYBACK",
+                    title = "Audio Engine & Queue Fixes",
+                    entries = listOf(
+                        "Equalizer shortcuts wired directly into track options and player context menus.",
+                        "Continuous playback fallback: local recommendation radio kicks in when queue is exhausted.",
+                        "Fixed queue drag-to-top reordering index corruption in playback queue sheet.",
+                        "Enforced VISIBILITY_PUBLIC and dedicated notification channel to guarantee track metadata on lockscreens across Android versions.",
                     ),
                 )
 
-                // Section 3: Spotify & Lossless
-                ChangeCategorySection(
-                    icon = Icons.Rounded.Sync,
-                    title = "Spotify Sync & Lossless Pipeline",
-                    items = listOf(
-                        "Spotify onboarding sync prompt for effortless library and playlist imports.",
-                        "Resilient FLAC downloading and streaming pipeline with automated retries and fallback.",
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                TechnicalChangelogSection(
+                    tag = "SYNC",
+                    title = "Spotify Onboarding & FLAC Sources",
+                    entries = listOf(
+                        "First-run onboarding prompt for one-tap Spotify library and playlist synchronization.",
+                        "Lossless FLAC downloader resilience with active YouTube Music / Tidal fallback and retry cooldown handling.",
                     ),
                 )
 
-                // Section 4: UI & System Polish
-                ChangeCategorySection(
-                    icon = Icons.Rounded.Palette,
-                    title = "UI, Theming & Polish",
-                    items = listOf(
-                        "Lockscreen song title fix: enforced VISIBILITY_PUBLIC so track metadata is always visible on lockscreen.",
-                        "Custom dark minimalist vinyl app icon with in-app dynamic icon switcher and live previews.",
-                        "Decluttered UI: stripped upstream donation banners, Ko-fi tickers, and unused telemetry workers.",
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                TechnicalChangelogSection(
+                    tag = "CLEANUP",
+                    title = "Upstream De-bloat & Theming",
+                    entries = listOf(
+                        "Stripped upstream sponsor banners, Ko-fi donation tickers, web-link cloud sync paywalls, and Discord self-bot prompts.",
+                        "Removed unused upstream telemetry workers and unauthenticated background pings.",
+                        "Custom dark minimalist SVG vinyl launcher icon with dynamic in-app icon picker sheet.",
                     ),
                 )
 
-                // Section 5: Updates & Performance
-                ChangeCategorySection(
-                    icon = Icons.Rounded.Speed,
-                    title = "Updates & Performance",
-                    items = listOf(
-                        "100% automated direct updates via the GitHub Releases API.",
-                        "Multi-threaded IR compiler backend, ARM-only NDK release filters, and R8 minification for fast startup and smaller APK.",
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                TechnicalChangelogSection(
+                    tag = "BUILD",
+                    title = "Distribution & CI",
+                    entries = listOf(
+                        "GitHub Releases API integration for direct in-app update checks and APK downloads.",
+                        "ARM-only release NDK filters (dropping unused x86/x86_64 ffmpeg/python slices), multi-threaded IR compiler backend, and R8 minification.",
                     ),
                 )
             }
@@ -186,9 +165,9 @@ fun ForkChangesDialog(onDismiss: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.OpenInNew,
+                        imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(15.dp),
                     )
                     Text(stringResource(R.string.settings_about_fork_changes_github))
                 }
@@ -198,59 +177,62 @@ fun ForkChangesDialog(onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun ChangeCategorySection(
-    icon: ImageVector,
+private fun TechnicalChangelogSection(
+    tag: String,
     title: String,
-    items: List<String>,
+    entries: List<String>,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.primary,
-            )
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+            ) {
+                Text(
+                    text = tag,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }
 
-        Surface(
-            shape = RoundedCornerShape(10.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                items.forEach { item ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.Top,
-                    ) {
-                        Text(
-                            text = "•",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            text = item,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            lineHeight = 16.sp,
-                        )
-                    }
+            entries.forEach { entry ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Text(
+                        text = "-",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = entry,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 16.sp,
+                    )
                 }
             }
         }

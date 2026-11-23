@@ -89,14 +89,14 @@
     <string name="settings_update_check_failed">Couldn\'t check for updates — try again later</string>
     <string name="settings_version_label">Version</string>
     <string name="settings_license_label">License</string>
-    <!-- Settings > About: What we changed from the Stash fork -->
-    <string name="settings_about_fork_changes">What\'s changed from Stash</string>
-    <string name="settings_about_fork_changes_detail">Features, bug fixes &amp; ESP32 Hi-Fi notes</string>
-    <string name="settings_about_fork_changes_dialog_title">About This Fork</string>
-    <string name="settings_about_fork_changes_dialog_subtitle">Music · Enhancements over Stash</string>
-    <string name="settings_about_fork_changes_intro">This app is an audiophile-focused fork of the open-source Stash music player. We built direct-to-hardware ESP32 DAC wireless streaming, intelligent local playback, clean minimalist theming, and essential fixes.</string>
-    <string name="settings_about_fork_changes_close">Got it</string>
-    <string name="settings_about_fork_changes_github">GitHub</string>
+    <!-- Settings > About: Technical changelog from Stash fork -->
+    <string name="settings_about_fork_changes">Changes from Stash fork</string>
+    <string name="settings_about_fork_changes_detail">Hardware streaming, playback fixes, and de-bloat notes</string>
+    <string name="settings_about_fork_changes_dialog_title">Changes from Stash fork</string>
+    <string name="settings_about_fork_changes_dialog_subtitle">Technical changelog and modifications</string>
+    <string name="settings_about_fork_changes_intro">Music is a fork of the Stash Android client. Upstream focuses on web link sync and cloud tiers; this fork strips upstream paywalls and telemetry, refocusing the app on direct ESP32 Wi-Fi DAC streaming, local playback fixes, and leaner builds.</string>
+    <string name="settings_about_fork_changes_close">Close</string>
+    <string name="settings_about_fork_changes_github">GitHub repo</string>
     <string name="settings_album_art_credit">Album art</string>
     <string name="settings_album_art_credit_detail">Back covers and inside pages come from the Cover Art Archive and Discogs. This app uses Discogs\' API but is not affiliated with, sponsored or endorsed by Discogs. \'Discogs\' is a trademark of Zink Media, LLC.</string>
     <string name="settings_open_source_notices">Open-source notices</string>
