@@ -147,27 +147,31 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/master'
         with:
-          tag_name: v0.9.135
-          name: "Music Hi-Fi v0.9.135"
+          tag_name: v0.9.136
+          name: "Music Hi-Fi v0.9.136"
           body: |
             <!-- stash-app
             Official update from Gokul (Developer). Safe to install!
-            - 68 MB Ultra-Compact Build | Shrunk APK from 163 MB to 67.9 MB via R8 minification and native ABI stripping.
-            - Fast Startup & Battery Savings | Staged app cold start, 16-connection warm keep-alive pool, and 50 MB response cache.
-            - Pre-Update Snapshot & Rollback Safety | Automated stash.db backup before updates and emergency rollback recovery support.
-            - ESP32 Dual-Mode Wi-Fi DAC | Dynamic pop-free switching between 32-bit PCM5102A and 8-bit built-in DAC with TPDF dither.
+            - Spotify Sync Onboarding | Gentle first-run prompt to sync Spotify playlists and library with 1-tap sign-in redirect.
+            - Custom Dynamic App Icons | 8 audiophile-themed dynamic launcher icons with in-app preview sheet (Settings > Appearance).
+            - Real-Time Widget Theming | Dynamic launcher widget search icon inheritance and modernized titanium silver widget styling.
+            - Lockscreen Song Titles | Enforced public notification channels ensuring track metadata and art show on all Android lockscreens.
+            - Queue Drag-to-Top | Fixed viewport boundaries allowing tracks to be dragged smoothly to index 0.
+            - Direct Equalizer Access | Equalizer shortcut directly reachable from Now Playing track options and queue menus.
             -->
-            ### 🎵 Music Hi-Fi v0.9.134 - Official Release
+            ### 🎵 Music Hi-Fi v0.9.136 - Official Release
 
-            > **📢 Notice from Gokul:** This update brings major performance improvements, battery optimization, data savings, and safety features. You can safely install this update directly!
+            > **📢 Notice from Gokul:** This release brings custom launcher icon theming, real-time widget updates, Spotify sync onboarding, queue reordering fixes, direct equalizer access, and full lockscreen music info visibility!
 
             #### 🌟 Highlights & What's New:
-            - **60% APK Size Reduction**: Shrunk the download size from 163 MB to **67.9 MB** with R8 whole-program optimization and native ABI stripping.
-            - **Sub-500ms Instant App Startup**: Eliminated initial launch lag by staging heavy background services (yt-dlp, TLS, periodic workers) into deferred stages.
-            - **Smart Network Caching & Battery Savings**: Added a 50 MB HTTP response cache and a 16-connection warm keep-alive pool. Reduces cell data usage and modem battery drain without touching bit-perfect FLAC audio quality.
-            - **Automatic Pre-Update Database Snapshot**: Automatically creates a backup snapshot of your library database before any update is staged, preventing data loss.
-            - **Emergency Update Rollback Support**: Built-in support to instantly push stable rollback versions to devices if any regression occurs.
-            - **ESP32 Dual-Mode DAC Switching**: Dynamic pop-free switching between external 32-bit PCM5102A and internal built-in DAC with TPDF dither and FreeRTOS synchronization.
+            - **🎨 8 Custom Dynamic App Icons & Visual Picker**: Choose from Obsidian Titanium, Cyber Emerald, Electric Violet, Sunset Amber, Ocean Sapphire, Crimson Ruby, Midnight Gold, or Minimal Mono with live vector-accurate preview thumbnails (**Settings > Appearance > App icon**).
+            - **📱 Real-Time Widget Icon & Previews**: Launcher widget search and tray now dynamically inherit the active app icon theme and refresh instantly; widget previews modernized to sleek titanium silver.
+            - **🎧 Spotify Sync Onboarding Prompt**: First-run gentle prompt appearing after initial app exploration (~25 seconds) offering a one-click redirect to Spotify library sync.
+            - **🔒 Lockscreen Song Title & Cover Viewing**: Enforced `VISIBILITY_PUBLIC` notification channel and fallback metadata builders ensuring track title and artist display reliably on lockscreens across all Android versions and OEM skins.
+            - **🎚️ Direct Equalizer Access**: Tap the 3-dots "Track Options" menu directly on the Now Playing screen or in the playback queue to jump straight into the 10-band Equalizer.
+            - **📋 Queue Drag-to-Top**: Fixed auto-scrolling viewport boundaries in the playback queue sheet so reordered songs can easily be moved all the way to index 0.
+            - **✨ Curated Home Screen & Supporter Perks**: Decluttered home tab, removed upstream telemetry workers and unauthenticated network pings, and unlocked unlimited Tidal streaming.
+            - **🐧 Technical Fork Changelog**: New Linux-style breakdown of all architectural, audio pipeline, and ESP32 streaming modifications (**Settings > About & Help > Changes from Stash fork**).
 
             #### 📦 Download:
             Download `Music.apk` below or tap "Update now" inside the app.
