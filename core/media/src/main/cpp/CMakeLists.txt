@@ -45,9 +45,18 @@ target_compile_features(stash_tuning PRIVATE cxx_std_17)
 target_compile_options(stash_tuning PRIVATE
     -O3
     -ffast-math
+    -flto
+    -fdata-sections
+    -ffunction-sections
     -DNDEBUG
     -fvisibility=hidden
     -Wall
+)
+
+target_link_options(stash_tuning PRIVATE
+    -Wl,--gc-sections
+    -Wl,--strip-all
+    -flto
 )
 
 # NEON: always there on arm64; on armeabi-v7a the NDK has enabled it by default since r21, said

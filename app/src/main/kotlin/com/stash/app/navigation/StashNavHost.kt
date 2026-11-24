@@ -142,6 +142,10 @@ private fun StashNavGraph(
         navController = navController,
         startDestination = startDestination,
         modifier = modifier,
+        enterTransition = { androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(120)) },
+        exitTransition = { androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(90)) },
+        popEnterTransition = { androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(120)) },
+        popExitTransition = { androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(90)) },
     ) {
         composable<HomeRoute> { homeEntry ->
             HomeScreen(
