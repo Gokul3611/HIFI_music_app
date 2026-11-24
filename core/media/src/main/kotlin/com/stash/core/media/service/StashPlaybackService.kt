@@ -406,6 +406,19 @@ class StashPlaybackService : MediaLibraryService() {
      */
     private var resumeSkipPending = false
 
+    /**
+     * Set by a widget Previous that started this service with nothing loaded: the next playback
+     * resumption starts one song back (see onStartCommand and onPlaybackResumption). Main thread only.
+     */
+    private var resumePreviousPending = false
+
+    /**
+     * True when playback was initiated or controlled from the home screen widget.
+     * Activates ultra-low-power mode: runs only essential playback and bit-perfect audio
+     * pipeline components while stripping non-essential overhead (like Discord RPC).
+     */
+    @Volatile private var isWidgetHeadlessMode = false
+
     // Service-scoped CoroutineScope for the like-state observer + toggle
     // suspending calls. Cancelled in onDestroy so the observer doesn't leak
     // when the service stops.
@@ -1976,6 +1989,7 @@ class StashPlaybackService : MediaLibraryService() {
      * as file:// and just fall back to the app icon).
      */
     private fun updateDiscordPresence(mediaItem: MediaItem?, isPlaying: Boolean) {
+        if (isWidgetHeadlessMode) return
         val metadata = mediaItem?.mediaMetadata
         val title = metadata?.title?.toString().orEmpty()
         if (title.isBlank()) {
@@ -2195,12 +2209,22 @@ class StashPlaybackService : MediaLibraryService() {
      * left for onPlaybackResumption, which the Play key triggers.
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (com.stash.core.media.widget.WidgetMediaIntents.isWidgetPlayback(intent)) {
+            isWidgetHeadlessMode = true
+        }
         if (com.stash.core.media.widget.WidgetMediaIntents.isSkipFirst(intent)) {
             val player = mediaSession?.player
             if (player != null && player.mediaItemCount > 0) {
                 if (player.isCommandAvailable(Player.COMMAND_SEEK_TO_NEXT)) player.seekToNext()
             } else {
                 resumeSkipPending = true
+            }
+        } else if (com.stash.core.media.widget.WidgetMediaIntents.isSkipPrevious(intent)) {
+            val player = mediaSession?.player
+            if (player != null && player.mediaItemCount > 0) {
+                if (player.isCommandAvailable(Player.COMMAND_SEEK_TO_PREVIOUS)) player.seekToPrevious()
+            } else {
+                resumePreviousPending = true
             }
         }
         return super.onStartCommand(intent, flags, startId)
@@ -3240,12 +3264,20 @@ class StashPlaybackService : MediaLibraryService() {
                 // A home screen widget Next on a stopped service: resume one song on (see onStartCommand).
                 val skipOne = isForPlayback && resumeSkipPending
                 if (isForPlayback) resumeSkipPending = false
+                val skipPrevious = isForPlayback && resumePreviousPending
+                if (isForPlayback) resumePreviousPending = false
 
                 // Preferred path: restore the full persisted queue at the
                 // saved track + position so next/prev work and playback
                 // continues where it stopped.
                 val plan = playbackResumer.buildResumePlan()
-                    ?.let { if (skipOne) it.skippedOne() else it }
+                    ?.let {
+                        when {
+                            skipOne -> it.skippedOne()
+                            skipPrevious -> it.skippedPreviousOne()
+                            else -> it
+                        }
+                    }
                 if (plan != null) {
                     val items = plan.tracks.map { buildResumeItem(it) }
                     kotlinx.coroutines.withContext(Dispatchers.Main) {

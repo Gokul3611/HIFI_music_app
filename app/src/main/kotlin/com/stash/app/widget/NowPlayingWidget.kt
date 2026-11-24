@@ -2,7 +2,6 @@ package com.stash.app.widget
 
 import android.content.Context
 import android.content.res.Configuration
-import android.graphics.Bitmap
 import android.os.Build
 import android.widget.RemoteViews
 import androidx.annotation.LayoutRes
@@ -28,7 +27,6 @@ import androidx.glance.appwidget.AndroidRemoteViews
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionSendBroadcast
-import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.action.actionStartService
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
@@ -38,7 +36,6 @@ import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
-import androidx.glance.layout.ContentScale
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
@@ -58,7 +55,6 @@ import com.stash.core.media.widget.WidgetControls
 import com.stash.core.media.widget.WidgetKeyRelay
 import com.stash.core.media.widget.WidgetMediaIntents
 import com.stash.core.media.widget.WidgetTransport
-import com.stash.core.media.widget.WidgetWideLayout
 import com.stash.core.ui.theme.StashDarkColorScheme
 import com.stash.core.ui.theme.StashLightColorScheme
 import dagger.hilt.EntryPoint
@@ -77,16 +73,9 @@ interface NowPlayingWidgetEntryPoint {
 }
 
 /**
- * Stash's home screen widget: the song that's playing (or was last), its cover, play/pause and
- * next. One widget, two shapes picked from its real size ([SizeMode.Exact], so a resize redraws it):
- *  - wide (4×1 and other short, wide sizes): a card with the rounded cover on the left, title and
- *    artist, then the play/pause disc in the album colour and Next;
- *  - square (2×2 and taller sizes): the cover full bleed, with a dark strip along the bottom holding
- *    the title, the artist and the two buttons.
- *
- * Updates are pushed by the playback service ([GlanceNowPlayingWidgetSink]); this widget has no
- * update period. A tap on the cover or title opens Now Playing; with nothing to show, the whole
- * widget opens the app.
+ * Stash's Hi-Fi home screen widget: ultra-low-power, bit-perfect audio player interface.
+ * Displays only essential metadata (title, artist, Hi-Fi status) and full track controls
+ * (Previous, Play/Pause, Next) without loading album art or opening the app activity.
  */
 class NowPlayingWidget : GlanceAppWidget() {
 
@@ -103,8 +92,6 @@ class NowPlayingWidget : GlanceAppWidget() {
         } catch (e: Exception) {
             WidgetModel.Empty
         }
-        // The song's text is drawn now; a cover that isn't on hand is fetched and redrawn after.
-        entryPoint.widgetSink().requestCover()
         provideContent {
             val model by store.models.collectAsState(initial = first)
             val serviceRunning by sessionBus.sessionAlive.collectAsState()
@@ -118,13 +105,8 @@ class NowPlayingWidget : GlanceAppWidget() {
 /** The app's own Material 3 schemes; Glance switches between them with the system's dark mode. */
 private val WidgetColors = ColorProviders(light = StashLightColorScheme, dark = StashDarkColorScheme)
 
-/** The widget card's corners: the app's large shape (StashShapes.large). */
-private val CardRadius = 16.dp
-
-/** The 4×1 cover's corners: the app's small shape, so it nests in the card's 16 dp at an 8 dp inset. */
-private val CoverRadius = 8.dp
-
-private val CardInset = WidgetWideLayout.INSET_DP.dp
+/** The widget card's corners: sleek 20 dp radius for a modern Hi-Fi console appearance. */
+private val CardRadius = 20.dp
 
 /** Taller than this, and not much wider than tall, and the widget draws its square shape. */
 private val SquareMinHeight = 100.dp
@@ -141,50 +123,40 @@ private fun NowPlayingContent(model: WidgetModel, serviceRunning: Boolean) {
     val state = model.state
     val title = state?.title ?: context.getString(R.string.widget_nothing_playing)
     val artist = state?.artist ?: context.getString(R.string.widget_open_stash)
-    val open: Action? = (if (state != null) WidgetMediaIntents.openPlayer(context) else WidgetMediaIntents.openApp(context))
-        ?.let { actionStartActivity(it) }
 
     if (isSquare(size)) {
-        SquareCard(model.cover, title, artist, buttons, model.accents, open)
+        SquareCard(title, artist, buttons, model.accents)
     } else {
-        WideCard(model.cover, title, artist, buttons, model.accents, open, size)
+        WideCard(title, artist, buttons, model.accents)
     }
 }
 
-/** The card behind everything: the theme's surface, rounded, marked as the widget's background. */
+/** The card background: never launches an activity on tap, keeping playback strictly headless. */
 @Composable
-private fun cardModifier(open: Action?): GlanceModifier {
-    val base = GlanceModifier
+private fun cardModifier(): GlanceModifier =
+    GlanceModifier
         .fillMaxSize()
         .appWidgetBackground()
-        // A tinted rounded drawable, so the corners are round below Android 12 too (cornerRadius
-        // is a no-op there); cornerRadius also clips the square shape's full-bleed cover on 12+.
         .background(ImageProvider(R.drawable.widget_card), colorFilter = ColorFilter.tint(GlanceTheme.colors.surface))
         .cornerRadius(CardRadius)
-    return if (open != null) base.clickable(open) else base
-}
 
 @Composable
 private fun WideCard(
-    cover: Bitmap?,
     title: String,
     artist: String,
     buttons: WidgetButtons?,
     accents: WidgetAccents,
-    open: Action?,
-    size: DpSize,
 ) {
-    // As tall as the card allows, and never so wide that Next is pushed off it (at 2×1 the cover goes).
-    val coverDp = WidgetWideLayout.coverDp(size.width.value, size.height.value, hasButtons = buttons != null)
     Row(
-        modifier = cardModifier(open).padding(CardInset),
+        modifier = cardModifier().padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (coverDp != null) {
-            Cover(cover, GlanceModifier.size(coverDp.dp).cornerRadius(CoverRadius))
-            Spacer(GlanceModifier.width(WidgetWideLayout.COVER_GAP_DP.dp))
-        }
-        Column(modifier = GlanceModifier.defaultWeight().wrapContentHeight(), verticalAlignment = Alignment.CenterVertically) {
+        Column(
+            modifier = GlanceModifier.defaultWeight().wrapContentHeight(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            HiFiBadge()
+            Spacer(GlanceModifier.height(2.dp))
             WidgetText(
                 text = title,
                 layout = R.layout.widget_text_title,
@@ -202,68 +174,104 @@ private fun WideCard(
             }
         }
         if (buttons != null) {
-            Spacer(GlanceModifier.width(8.dp))
-            PlayPauseButton(buttons, accents, diameter = 40.dp)
-            Spacer(GlanceModifier.width(4.dp))
-            NextButton(buttons.next, diameter = 40.dp, tint = GlanceTheme.colors.onSurface)
+            Spacer(GlanceModifier.width(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PreviousButton(buttons.previous, diameter = 36.dp, tint = GlanceTheme.colors.onSurface)
+                Spacer(GlanceModifier.width(6.dp))
+                PlayPauseButton(buttons, accents, diameter = 44.dp)
+                Spacer(GlanceModifier.width(6.dp))
+                NextButton(buttons.next, diameter = 36.dp, tint = GlanceTheme.colors.onSurface)
+            }
         }
     }
 }
 
 @Composable
 private fun SquareCard(
-    cover: Bitmap?,
     title: String,
     artist: String,
     buttons: WidgetButtons?,
     accents: WidgetAccents,
-    open: Action?,
 ) {
-    Box(modifier = cardModifier(open)) {
-        Cover(cover, GlanceModifier.fillMaxSize())
-        Column(modifier = GlanceModifier.fillMaxSize(), verticalAlignment = Alignment.Bottom) {
-            // The strip: a gradient from clear to 72% black, so white text reads on any cover. Every
-            // piece of it says wrapContentHeight (see WidgetText for why it has to be said).
-            Column(
-                modifier = GlanceModifier
-                    .fillMaxWidth()
-                    .wrapContentHeight()
-                    .background(ImageProvider(R.drawable.widget_scrim))
-                    .padding(start = 12.dp, end = 8.dp, top = 28.dp, bottom = 8.dp),
+    Column(
+        modifier = cardModifier().padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        HiFiBadge()
+        Spacer(GlanceModifier.height(6.dp))
+        Column(
+            modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            WidgetText(
+                text = title,
+                layout = R.layout.widget_text_title_square,
+                light = StashLightColorScheme.onSurface,
+                dark = StashDarkColorScheme.onSurface,
+            )
+            if (artist.isNotEmpty()) {
+                Spacer(GlanceModifier.height(3.dp))
+                WidgetText(
+                    text = artist,
+                    layout = R.layout.widget_text_artist_square,
+                    light = StashLightColorScheme.onSurfaceVariant,
+                    dark = StashDarkColorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (buttons != null) {
+            Spacer(GlanceModifier.height(8.dp))
+            Row(
+                modifier = GlanceModifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                WidgetText(text = title, layout = R.layout.widget_text_title_cover, light = OnScrim, dark = OnScrim)
-                Row(modifier = GlanceModifier.fillMaxWidth().wrapContentHeight(), verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = GlanceModifier.defaultWeight()) {
-                        if (artist.isNotEmpty()) {
-                            WidgetText(text = artist, layout = R.layout.widget_text_artist, light = OnScrimSecondary, dark = OnScrimSecondary)
-                        }
-                    }
-                    if (buttons != null) {
-                        PlayPauseButton(buttons, accents, diameter = 36.dp)
-                        Spacer(GlanceModifier.width(2.dp))
-                        NextButton(buttons.next, diameter = 36.dp, tint = ColorProvider(day = OnScrim, night = OnScrim))
-                    }
-                }
+                PreviousButton(buttons.previous, diameter = 38.dp, tint = GlanceTheme.colors.onSurface)
+                Spacer(GlanceModifier.width(14.dp))
+                PlayPauseButton(buttons, accents, diameter = 48.dp)
+                Spacer(GlanceModifier.width(14.dp))
+                NextButton(buttons.next, diameter = 38.dp, tint = GlanceTheme.colors.onSurface)
             }
         }
     }
 }
 
-/** Text on the square's dark strip: white whatever the theme (it sits on the cover, not the card). */
-private val OnScrim = Color.White
-private val OnScrimSecondary = Color.White.copy(alpha = 0.78f)
-
+/** Audiophile badge indicating pure direct audio playback. */
 @Composable
-private fun Cover(cover: Bitmap?, modifier: GlanceModifier) {
-    Image(
-        provider = if (cover != null) ImageProvider(cover) else ImageProvider(R.drawable.widget_cover_placeholder),
-        contentDescription = null,
-        modifier = modifier,
-        contentScale = ContentScale.Crop,
+private fun HiFiBadge() {
+    WidgetText(
+        text = "HI-FI DIRECT",
+        layout = R.layout.widget_text_badge,
+        light = Color(0xFF0284C7),
+        dark = Color(0xFF38BDF8),
     )
 }
 
-/** Play / pause: a disc in the song's accent with its ink on top, as the mini player draws it. */
+/** Previous track button: sends KEYCODE_MEDIA_PREVIOUS directly to the service. */
+@Composable
+private fun PreviousButton(transport: WidgetTransport, diameter: Dp, tint: androidx.glance.unit.ColorProvider) {
+    val context = LocalContext.current
+    val label = context.getString(R.string.widget_previous)
+    Box(
+        modifier = GlanceModifier
+            .size(diameter)
+            .cornerRadius(diameter / 2)
+            .clickable(mediaAction(context, transport))
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            provider = ImageProvider(R.drawable.widget_ic_prev),
+            contentDescription = null,
+            modifier = GlanceModifier.size(24.dp),
+            colorFilter = ColorFilter.tint(tint),
+        )
+    }
+}
+
+/** Play / pause hero button: a distinct circular disc in the track's accent color. */
 @Composable
 private fun PlayPauseButton(buttons: WidgetButtons, accents: WidgetAccents, diameter: Dp) {
     val context = LocalContext.current
@@ -283,12 +291,13 @@ private fun PlayPauseButton(buttons: WidgetButtons, accents: WidgetAccents, diam
         Image(
             provider = ImageProvider(if (buttons.showsPause) R.drawable.widget_ic_pause else R.drawable.widget_ic_play),
             contentDescription = null,
-            modifier = GlanceModifier.size(diameter * 0.6f),
+            modifier = GlanceModifier.size(diameter * 0.55f),
             colorFilter = ColorFilter.tint(ColorProvider(day = Color(accents.onAccentLight), night = Color(accents.onAccentDark))),
         )
     }
 }
 
+/** Next track button: sends KEYCODE_MEDIA_NEXT directly to the service. */
 @Composable
 private fun NextButton(transport: WidgetTransport, diameter: Dp, tint: androidx.glance.unit.ColorProvider) {
     val context = LocalContext.current
@@ -311,10 +320,9 @@ private fun NextButton(transport: WidgetTransport, diameter: Dp, tint: androidx.
 }
 
 /**
- * A media-button tap: the same event the media notification sends (see WidgetMediaIntents). Play
- * (and Next while nothing plays) starts the service in the foreground; Pause and Next while playing
- * go through the app's receiver ([WidgetKeyRelay]), which still answers when a crash left this
- * widget showing Pause.
+ * A media-button tap: starts the service in the foreground when stopped,
+ * or relays through NowPlayingWidgetKeyReceiver while running.
+ * Never starts an activity!
  */
 private fun mediaAction(context: Context, transport: WidgetTransport): Action =
     if (transport.foreground) {
@@ -323,24 +331,13 @@ private fun mediaAction(context: Context, transport: WidgetTransport): Action =
         actionSendBroadcast(WidgetKeyRelay.intent(context, NowPlayingWidgetKeyReceiver::class.java, transport))
     }
 
-/**
- * One line of text in the app's own fonts. Glance's Text can only name system font families, so
- * the line is a tiny RemoteViews layout ([layout]: a TextView whose `fontFamily` is the app's
- * Space Grotesk or Inter resource), which the launcher inflates from Stash's resources.
- *
- * The height has to be said. On Android 13+ Glance puts the line in a frame whose XML is
- * match_parent both ways and only overrides what a modifier names, so a line with no height takes
- * every pixel its column offers. The square's strip column is measured at an exact height (its
- * background image makes Glance wrap it in a box and fill that box), so the title took the whole
- * strip and the artist-and-buttons row got none.
- */
+/** One line of text in the app's own custom fonts via RemoteViews layout. */
 @Composable
 private fun WidgetText(text: String, @LayoutRes layout: Int, light: Color, dark: Color) {
     val context = LocalContext.current
     val views = RemoteViews(context.packageName, layout).apply {
         setTextViewText(R.id.widget_text, text)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // The launcher picks the colour for the system's dark mode as it draws.
             setColorInt(R.id.widget_text, "setTextColor", light.toArgb(), dark.toArgb())
         } else {
             setTextColor(R.id.widget_text, (if (context.isNightMode()) dark else light).toArgb())

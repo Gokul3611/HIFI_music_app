@@ -49,4 +49,28 @@ class WidgetResumeSkipTest {
         val original = plan(start = 0, size = 1, repeat = RepeatMode.ALL)
         assertThat(original.skippedOne()).isEqualTo(original)
     }
+
+    @Test
+    fun `resumes the previous song from its start`() {
+        val original = plan(start = 2)
+        val skipped = original.skippedPreviousOne()
+        assertThat(skipped.startIndex).isEqualTo(1)
+        assertThat(skipped.positionMs).isEqualTo(0L)
+        assertThat(skipped.tracks).isSameInstanceAs(original.tracks)
+    }
+
+    @Test
+    fun `at the start of the queue it wraps under repeat all for previous`() {
+        val skipped = plan(start = 0, size = 3, repeat = RepeatMode.ALL).skippedPreviousOne()
+        assertThat(skipped.startIndex).isEqualTo(2)
+        assertThat(skipped.positionMs).isEqualTo(0L)
+    }
+
+    @Test
+    fun `at the start of the queue without repeat it restarts the first track`() {
+        val original = plan(start = 0, repeat = RepeatMode.OFF)
+        val skipped = original.skippedPreviousOne()
+        assertThat(skipped.startIndex).isEqualTo(0)
+        assertThat(skipped.positionMs).isEqualTo(0L)
+    }
 }

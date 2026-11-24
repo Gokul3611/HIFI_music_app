@@ -96,3 +96,17 @@ fun PlaybackResumer.ResumePlan.skippedOne(): PlaybackResumer.ResumePlan {
         else -> this
     }
 }
+
+/**
+ * The resume plan for a widget Previous on a stopped service: one song back from where the queue was
+ * left, from its start. At the beginning of the queue it wraps only under repeat-all; otherwise it
+ * resumes the first track at its beginning.
+ */
+fun PlaybackResumer.ResumePlan.skippedPreviousOne(): PlaybackResumer.ResumePlan {
+    val prev = startIndex - 1
+    return when {
+        prev >= 0 -> copy(startIndex = prev, positionMs = 0L)
+        repeatMode == RepeatMode.ALL && tracks.size > 1 -> copy(startIndex = tracks.size - 1, positionMs = 0L)
+        else -> copy(startIndex = 0, positionMs = 0L)
+    }
+}

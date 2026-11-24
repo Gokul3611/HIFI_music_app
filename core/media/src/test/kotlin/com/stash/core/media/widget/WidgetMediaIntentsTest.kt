@@ -36,10 +36,12 @@ class WidgetMediaIntentsTest {
         val song = NowPlayingWidgetState("Song", "Artist", null, isPlaying = true)
         for (playing in listOf(true, false)) for (running in listOf(true, false)) {
             val buttons = WidgetControls.of(song.copy(isPlaying = playing), running)!!
-            for (transport in listOf(buttons.playPause, buttons.next)) {
+            for (transport in listOf(buttons.previous, buttons.playPause, buttons.next)) {
                 val intent = WidgetMediaIntents.mediaButton(context, transport)
                 assertThat(keyOf(intent).keyCode).isEqualTo(transport.keyCode)
                 assertThat(WidgetMediaIntents.isSkipFirst(intent)).isEqualTo(transport.skipFirst)
+                assertThat(WidgetMediaIntents.isSkipPrevious(intent)).isEqualTo(transport.skipPrevious)
+                assertThat(WidgetMediaIntents.isWidgetPlayback(intent)).isTrue()
             }
         }
     }
@@ -52,6 +54,18 @@ class WidgetMediaIntentsTest {
         )
         assertThat(keyOf(intent).keyCode).isEqualTo(KeyEvent.KEYCODE_MEDIA_PLAY)
         assertThat(WidgetMediaIntents.isSkipFirst(intent)).isTrue()
+        assertThat(WidgetMediaIntents.isSkipPrevious(intent)).isFalse()
+    }
+
+    @Test
+    fun `Previous from a paused widget is a Play key that asks for skip previous`() {
+        val intent = WidgetMediaIntents.mediaButton(
+            context,
+            WidgetTransport(KeyEvent.KEYCODE_MEDIA_PLAY, foreground = true, skipPrevious = true),
+        )
+        assertThat(keyOf(intent).keyCode).isEqualTo(KeyEvent.KEYCODE_MEDIA_PLAY)
+        assertThat(WidgetMediaIntents.isSkipPrevious(intent)).isTrue()
+        assertThat(WidgetMediaIntents.isSkipFirst(intent)).isFalse()
     }
 
     @Test
@@ -59,6 +73,10 @@ class WidgetMediaIntentsTest {
         assertThat(WidgetMediaIntents.isSkipFirst(null)).isFalse()
         assertThat(WidgetMediaIntents.isSkipFirst(Intent("other").putExtra(WidgetMediaIntents.EXTRA_SKIP_FIRST, true))).isFalse()
         assertThat(WidgetMediaIntents.isSkipFirst(Intent(Intent.ACTION_MEDIA_BUTTON))).isFalse()
+
+        assertThat(WidgetMediaIntents.isSkipPrevious(null)).isFalse()
+        assertThat(WidgetMediaIntents.isSkipPrevious(Intent("other").putExtra(WidgetMediaIntents.EXTRA_SKIP_PREVIOUS, true))).isFalse()
+        assertThat(WidgetMediaIntents.isSkipPrevious(Intent(Intent.ACTION_MEDIA_BUTTON))).isFalse()
     }
 
     @Test

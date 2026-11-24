@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The artist line: the mini player's (Inter 400, 12). The colour is set in code (day/night). -->
+<!-- The artist line: Inter Medium 12sp. The colour is set in code (day/night). -->
 <TextView xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_text"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:ellipsize="end"
-    android:fontFamily="@font/inter_regular"
+    android:fontFamily="@font/inter_medium"
     android:includeFontPadding="false"
-    android:letterSpacing="0.033"
+    android:letterSpacing="0.02"
     android:maxLines="1"
     android:textSize="12sp" />
+

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The widget card: StashShapes.large (16 dp). White, tinted to the theme's surface. -->
+<!-- The widget card: rounded shape (20 dp) with subtle border for high-end Hi-Fi look. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
     <solid android:color="#FFFFFFFF" />
-    <corners android:radius="16dp" />
+    <corners android:radius="20dp" />
 </shape>
+

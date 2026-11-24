@@ -7,65 +7,88 @@
     android:backgroundTint="@color/widget_surface"
     android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:padding="8dp">
-
-    <ImageView
-        android:layout_width="44dp"
-        android:layout_height="44dp"
-        android:importantForAccessibility="no"
-        android:scaleType="centerCrop"
-        android:src="@drawable/widget_cover_placeholder" />
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp">
 
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
         android:layout_weight="1"
         android:orientation="vertical">
 
         <TextView
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:fontFamily="@font/inter_semibold"
+            android:fontFamily="@font/space_grotesk_bold"
+            android:letterSpacing="0.12"
             android:maxLines="1"
-            android:text="@string/widget_preview_title"
-            android:textColor="@color/widget_on_surface"
-            android:textSize="14sp" />
+            android:text="HI-FI DIRECT"
+            android:textAllCaps="true"
+            android:textColor="#FF0284C7"
+            android:textSize="9sp" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
             android:ellipsize="end"
-            android:fontFamily="@font/inter_regular"
+            android:fontFamily="@font/space_grotesk_bold"
+            android:maxLines="1"
+            android:text="@string/widget_preview_title"
+            android:textColor="@color/widget_on_surface"
+            android:textSize="15sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:fontFamily="@font/inter_medium"
             android:maxLines="1"
             android:text="@string/widget_preview_artist"
             android:textColor="@color/widget_on_surface_variant"
             android:textSize="12sp" />
     </LinearLayout>
 
-    <FrameLayout
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_marginStart="8dp"
-        android:background="@drawable/widget_circle"
-        android:backgroundTint="@color/widget_accent">
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
         <ImageView
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:layout_gravity="center"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
             android:importantForAccessibility="no"
-            android:src="@drawable/widget_ic_play" />
-    </FrameLayout>
+            android:padding="6dp"
+            android:src="@drawable/widget_ic_prev"
+            android:tint="@color/widget_on_surface" />
 
-    <ImageView
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_marginStart="4dp"
-        android:importantForAccessibility="no"
-        android:padding="8dp"
-        android:src="@drawable/widget_ic_next"
-        android:tint="@color/widget_on_surface" />
+        <FrameLayout
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/widget_circle"
+            android:backgroundTint="@color/widget_accent">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:importantForAccessibility="no"
+                android:src="@drawable/widget_ic_play" />
+        </FrameLayout>
+
+        <ImageView
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="6dp"
+            android:importantForAccessibility="no"
+            android:padding="6dp"
+            android:src="@drawable/widget_ic_next"
+            android:tint="@color/widget_on_surface" />
+    </LinearLayout>
 </LinearLayout>

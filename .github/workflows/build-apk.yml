@@ -7,10 +7,12 @@ on:
       - master
       - feature/spotify-sync-onboarding-prompt
       - feature/custom-app-icons
+      - feature/widget-ultra-low-power-playback
   pull_request:
     branches:
       - master
       - feature/custom-app-icons
+      - feature/widget-ultra-low-power-playback
 
 permissions:
   contents: write
@@ -127,21 +129,18 @@ jobs:
 
       - name: Create or Update Test GitHub Release
         uses: softprops/action-gh-release@v2
-        if: github.ref == 'refs/heads/feature/spotify-sync-onboarding-prompt' || github.ref == 'refs/heads/feature/custom-app-icons'
+        if: github.ref == 'refs/heads/feature/spotify-sync-onboarding-prompt' || github.ref == 'refs/heads/feature/custom-app-icons' || github.ref == 'refs/heads/feature/widget-ultra-low-power-playback'
         with:
           tag_name: test-build
-          name: "Music Hi-Fi Test Build (Spotify Sync & Custom Icons)"
+          name: "Music Hi-Fi Test Build (Widget Ultra-Low-Power Playback)"
           prerelease: true
           make_latest: false
           body: |
-            🧪 **Test Build for Gokul**
-            - **Spotify Onboarding Prompt**: Gentle first-run prompt after app exploration (~25s) with single-click redirect to Spotify sign-in.
-            - **App Icon Visual Previews**: Rich vector-accurate squircle preview thumbnails and 8-theme picker sheet (Settings > Appearance).
-            - **Queue Drag-to-Top**: Smooth auto-scrolling all the way to index 0 across scroll boundaries.
-            - **Direct Equalizer Access**: Equalizer shortcut added to Now Playing "Track Options" (3-dots menu) and queue track options.
-            - **Dynamic Widget Icon & Previews**: Widget search in launcher now dynamically inherits the active app icon theme and refreshes in real time; updated widget placeholders to titanium silver branding.
-            - **Lockscreen Music Info**: Lockscreen song title viewing visibility fixes.
-            - **Decluttered Curated Home & About**: Curated home screen, Tidal unlimited, and technical Linux-style changelog dialog in Settings > About & Help.
+            🧪 **Test Build for Gokul: Ultra-Low-Power Headless Widget Playback**
+            - **Direct Headless Playback**: Tapping widget controls never opens the app or launches activities; runs directly via the audio service.
+            - **Micro-Amp / Sensor-Node Mode**: Strips cover art loading, bitmap decoding, and background Discord RPC overhead.
+            - **Full Track Controls**: Added Previous [⏮], Hero Play/Pause [⏯], and Next [⏭] controls.
+            - **Modern Hi-Fi Audio Console**: Sleek obsidian UI with "HI-FI DIRECT" status indicator and uncompromised bit-perfect audio quality.
           files: dist/Music.apk
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
