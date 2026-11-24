@@ -809,7 +809,6 @@ class StashPlaybackService : MediaLibraryService() {
             resolver = streamResolver,
             urlCache = streamUrlCache,
             trackDao = trackDao,
-            streamCache = streamCache,
             // Tidal may answer with a DASH MPD, so with a server set placeholders
             // resolve before their media source is chosen.
             resolveBeforeSourcePick = tidalStreamResolver::enabledHint,

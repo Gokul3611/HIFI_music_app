@@ -248,10 +248,7 @@ class LazyResolvingDataSource(
             CloudCopyFinder.ORIGIN -> cloudDelegate?.invoke() ?: throw IOException("cloud playback isn't wired")
             else -> httpDelegate()
         }
-        val targetUri = Uri.parse(stream.url)
-        val trackId = dataSpec.uri.lastPathSegment ?: stream.url
-        val stableKey = dataSpec.key ?: "stream:track:$trackId"
-        return delegateTo(delegate, dataSpec.buildUpon().setUri(targetUri).setKey(stableKey).build())
+        return delegateTo(delegate, dataSpec.buildUpon().setUri(Uri.parse(stream.url)).build())
     }
 
     private fun pinStream(stream: StreamUrl) {
