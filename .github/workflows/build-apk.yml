@@ -147,12 +147,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/master'
         with:
-          tag_name: v0.9.137
-          name: "Music Hi-Fi v0.9.137"
+          tag_name: v0.9.138
+          name: "Music Hi-Fi v0.9.138"
           body: |
             <!-- stash-app
             Official update from Gokul (Developer). Safe to install!
-            - Package Unification Fix | Restored official applicationId (com.stash.app) so updates seamlessly replace existing app in-place without duplicate installs.
+            - Production Update Fix | Restored production package identity to com.stash.app.debug so all v0.9.135 and v0.9.136 users can update seamlessly in-place.
             - Spotify Sync Onboarding | Gentle first-run prompt to sync Spotify playlists and library with 1-tap sign-in redirect.
             - Custom Dynamic App Icons | 8 audiophile-themed dynamic launcher icons with in-app preview sheet (Settings > Appearance).
             - Real-Time Widget Theming | Dynamic launcher widget search icon inheritance and modernized titanium silver widget styling.
@@ -160,12 +160,12 @@ jobs:
             - Queue Drag-to-Top | Fixed viewport boundaries allowing tracks to be dragged smoothly to index 0.
             - Direct Equalizer Access | Equalizer shortcut directly reachable from Now Playing track options and queue menus.
             -->
-            ### 🎵 Music Hi-Fi v0.9.137 - Official Release
+            ### 🎵 Music Hi-Fi v0.9.138 - Official Release
 
-            > **📢 Notice from Gokul:** This release restores the official package identifier (`com.stash.app`), resolving the issue where updates installed as a separate app. You can safely install this update directly over your existing app!
+            > **📢 Notice from Gokul:** This release fixes in-app updates for all existing users on v0.9.135 and v0.9.136. Your app will update cleanly in place with zero data loss!
 
             #### 🌟 Highlights & What's New:
-            - **📦 In-Place App Update Fix**: Restored `com.stash.app` package ID so updates install directly over your current app with zero data loss or duplicate icons.
+            - **📦 In-Place Update Fix**: Matches your installed production app identity (`com.stash.app.debug`), allowing in-app updates to download and install instantly.
             - **🎨 8 Custom Dynamic App Icons & Visual Picker**: Choose from Obsidian Titanium, Cyber Emerald, Electric Violet, Sunset Amber, Ocean Sapphire, Crimson Ruby, Midnight Gold, or Minimal Mono with live vector-accurate preview thumbnails (**Settings > Appearance > App icon**).
             - **📱 Real-Time Widget Icon & Previews**: Launcher widget search and tray now dynamically inherit the active app icon theme and refresh instantly; widget previews modernized to sleek titanium silver.
             - **🎧 Spotify Sync Onboarding Prompt**: First-run gentle prompt appearing after initial app exploration (~25 seconds) offering a one-click redirect to Spotify library sync.

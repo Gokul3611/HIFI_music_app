@@ -150,8 +150,8 @@ abstract class SyncDebugNetworkConfigTask : DefaultTask() {
 
 androidComponents {
     onVariants(selector().withBuildType("release")) { variant ->
-        check(variant.applicationId.get() == "com.stash.app") {
-            "CRITICAL: Release applicationId MUST strictly be 'com.stash.app' to prevent duplicate app installs and broken in-app updates! Found: '${variant.applicationId.get()}'"
+        check(variant.applicationId.get() == "com.stash.app.debug") {
+            "CRITICAL: Release applicationId MUST strictly be 'com.stash.app.debug' to prevent duplicate app installs and broken in-app updates! Found: '${variant.applicationId.get()}'"
         }
     }
     onVariants(selector().withBuildType("debug")) { variant ->
@@ -166,11 +166,11 @@ android {
     namespace = "com.stash.app"
     compileSdk = 35
     defaultConfig {
-        applicationId = "com.stash.app"
+        applicationId = "com.stash.app.debug"
         minSdk = 26
         targetSdk = 35
-        versionCode = 173
-        versionName = "0.9.137"
+        versionCode = 174
+        versionName = "0.9.138"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Cloud storage sign-in. OneDrive redirects to `${applicationId}://oauth/onedrive` (the
         // data:cloud manifest declares it, so debug and release each get their own); Dropbox to
@@ -250,7 +250,6 @@ android {
             }
         }
         debug {
-            applicationIdSuffix = ".debug"
             buildConfigField("String", "SYNC_BASE_URL", "\"$syncDebugBaseUrl\"")
             buildConfigField("Boolean", "WEB_LINK_ENABLED", "false")
             manifestPlaceholders["webLinkEnabled"] = "false"
