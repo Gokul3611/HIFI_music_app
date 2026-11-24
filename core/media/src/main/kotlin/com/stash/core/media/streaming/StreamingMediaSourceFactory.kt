@@ -108,7 +108,6 @@ class StreamingMediaSourceFactory @Inject constructor(
     fun createDashMediaSource(mediaItem: MediaItem, mpdUrl: String): MediaSource {
         val httpFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(httpClient)
             .setUserAgent("Stash/0.9.26")
-            .setAllowCrossProtocolRedirects(false)
         val item = mediaItem.buildUpon()
             .setUri(mpdUrl)
             .setMimeType(MimeTypes.APPLICATION_MPD)
@@ -121,7 +120,6 @@ class StreamingMediaSourceFactory @Inject constructor(
         val trackId = mediaItem.mediaId.toLongOrNull()
         val http = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(httpClient)
             .setUserAgent("Stash/0.9.26")
-            .setAllowCrossProtocolRedirects(false)
         val source = DataSource.Factory {
             HlsManifestDataSource(http.createDataSource(), stream.url, current, { streamAllowed() },
                 refresh = {
