@@ -46,6 +46,7 @@ import com.stash.core.media.streaming.PrefetchOrchestrator
 import com.stash.core.media.streaming.StashMediaSourceFactory
 import com.stash.core.media.streaming.StreamingMediaSourceFactory
 import com.stash.core.media.widget.skippedOne
+import com.stash.core.media.widget.skippedPreviousOne
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
