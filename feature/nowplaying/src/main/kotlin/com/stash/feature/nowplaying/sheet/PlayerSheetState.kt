@@ -58,6 +58,7 @@ class PlayerSheetState(
     initialAnchor: PlayerSheetAnchor = PlayerSheetAnchor.MINI,
     private val scope: CoroutineScope,
     private val keepWarmMs: Long = KEEP_WARM_MS,
+    initialWarm: Boolean = false,
 ) {
     private val value = mutableFloatStateOf(initialAnchor.value)
 
@@ -77,8 +78,8 @@ class PlayerSheetState(
         private set
 
     /** Whether Now Playing is composed. */
-    var isWarm by mutableStateOf(initialAnchor != PlayerSheetAnchor.MINI)
-        private set
+    var isWarm by mutableStateOf(initialWarm || initialAnchor != PlayerSheetAnchor.MINI)
+        internal set
 
     /** Locks every drag (phase B: while a queue row is being reordered). */
     var gesturesLocked by mutableStateOf(false)
@@ -367,9 +368,7 @@ class PlayerSheetState(
 fun rememberPlayerSheetState(): PlayerSheetState {
     val scope = rememberCoroutineScope()
     return rememberSaveable(saver = PlayerSheetState.saver(scope)) {
-        PlayerSheetState(PlayerSheetAnchor.MINI, scope).apply {
-            isWarm = true
-        }
+        PlayerSheetState(PlayerSheetAnchor.MINI, scope, initialWarm = true)
     }
 }
 
