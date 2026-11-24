@@ -3,10 +3,23 @@ package com.stash.core.media.streaming
 import android.content.Context
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.cache.CacheDataSink
+import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.SimpleCache
+import androidx.media3.extractor.ExtractorsFactory
+import androidx.media3.extractor.flac.FlacExtractor
+import androidx.media3.extractor.mkv.MatroskaExtractor
+import androidx.media3.extractor.mp3.Mp3Extractor
+import androidx.media3.extractor.mp4.FragmentedMp4Extractor
+import androidx.media3.extractor.mp4.Mp4Extractor
+import androidx.media3.extractor.ogg.OggExtractor
+import androidx.media3.extractor.ts.AdtsExtractor
+import androidx.media3.extractor.wav.WavExtractor
 import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
@@ -45,6 +58,7 @@ class StashMediaSourceFactory(
     resolver: StreamSourceRegistry,
     urlCache: StreamUrlCache,
     trackDao: TrackDao,
+    private val streamCache: SimpleCache? = null,
     /**
      * True while a Tidal (BitChord) server is configured: placeholders then
      * resolve BEFORE choosing a media source ([ResolveFirstMediaSource]), since
@@ -81,13 +95,40 @@ class StashMediaSourceFactory(
         kotlinx.coroutines.SupervisorJob() + resolveDispatcher,
     )
 
+    // Fast audio-first extractors: FLAC first, then AAC/ADTS, OGG/Opus, MP4/fMP4, Matroska, MP3, WAV.
+    // Avoids Media3's DefaultExtractorsFactory testing 12 video/unrelated containers before FLAC.
+    private val audioExtractorsFactory = ExtractorsFactory {
+        arrayOf(
+            FlacExtractor(),
+            AdtsExtractor(),
+            OggExtractor(),
+            Mp4Extractor(),
+            FragmentedMp4Extractor(),
+            MatroskaExtractor(),
+            Mp3Extractor(),
+            WavExtractor(),
+        )
+    }
+
     // Every network source below is gated when it OPENS ([DownloadModeGate]), not only here when its
     // media source is made: a source made in Stream only and opened after the switch flips is refused.
     // A file on the phone always opens.
     private val httpDataSourceFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(httpClient)
         .setUserAgent("Stash/0.9.26")
+    private val cachedHttpDataSourceFactory = if (streamCache != null) {
+        CacheDataSource.Factory()
+            .setCache(streamCache)
+            .setUpstreamDataSourceFactory(httpDataSourceFactory)
+            .setCacheWriteDataSinkFactory(CacheDataSink.Factory().setCache(streamCache))
+            .setFlags(
+                CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR or
+                    CacheDataSource.FLAG_BLOCK_ON_CACHE,
+            )
+    } else {
+        httpDataSourceFactory
+    }
     private val localDataSourceFactory = DownloadModeGate.gate(DefaultDataSource.Factory(context, httpDataSourceFactory), streamAllowed)
-    private val localFactory = DefaultMediaSourceFactory(localDataSourceFactory)
+    private val localFactory = DefaultMediaSourceFactory(localDataSourceFactory, audioExtractorsFactory)
 
     internal val jioSaavnHttpClient = httpClient.newBuilder()
         .followRedirects(false)
@@ -97,7 +138,7 @@ class StashMediaSourceFactory(
         androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(jioSaavnHttpClient),
         streamAllowed,
     )
-    private val jioSaavnFactory = DefaultMediaSourceFactory(jioSaavnDataSourceFactory)
+    private val jioSaavnFactory = DefaultMediaSourceFactory(jioSaavnDataSourceFactory, audioExtractorsFactory)
 
     // Full-timeline placeholders: stash-resolve://track/<id> items resolve
     // their URL inside LazyResolvingDataSource.open() on the loader thread.
@@ -112,7 +153,7 @@ class StashMediaSourceFactory(
                 // Each delegate gated too: a placeholder whose URL was cached opens it without a resolve.
                 httpDelegate = {
                     DownloadModeGate(
-                        httpDataSourceFactory.createDataSource(),
+                        cachedHttpDataSourceFactory.createDataSource(),
                         streamAllowed,
                     )
                 },
@@ -126,11 +167,11 @@ class StashMediaSourceFactory(
                 streamAllowed = streamAllowed,
             )
         }
-    private val lazyFactory = DefaultMediaSourceFactory(lazyDataSourceFactory)
+    private val lazyFactory = DefaultMediaSourceFactory(lazyDataSourceFactory, audioExtractorsFactory)
 
     /** What a stream opens as in Download mode: an error, so the player skips it. */
     private val refusedDataSourceFactory = DataSource.Factory { DownloadModeRefusal() }
-    private val refusedFactory = DefaultMediaSourceFactory(refusedDataSourceFactory)
+    private val refusedFactory = DefaultMediaSourceFactory(refusedDataSourceFactory, audioExtractorsFactory)
 
     private val cloudSourceFactory: DataSource.Factory = cloudDataSourceFactory
         ?.let { DownloadModeGate.gate(it, streamAllowed, alwaysNetwork = true) }
@@ -235,7 +276,15 @@ class StashMediaSourceFactory(
                         } else if (resolved?.isDash == true) {
                             streamingFactory.createDashMediaSource(item, resolved.url)
                         } else {
-                            lazyFactory.createMediaSource(item)
+                            val mimeType = when (resolved?.codec?.lowercase()) {
+                                "flac" -> MimeTypes.AUDIO_FLAC
+                                "aac" -> MimeTypes.AUDIO_AAC
+                                "opus" -> MimeTypes.AUDIO_OPUS
+                                "mp4", "m4a" -> MimeTypes.AUDIO_MP4
+                                else -> null
+                            }
+                            val updatedItem = if (mimeType != null) item.buildUpon().setMimeType(mimeType).build() else item
+                            lazyFactory.createMediaSource(updatedItem)
                         }
                     },
                 )

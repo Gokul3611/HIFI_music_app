@@ -3326,9 +3326,18 @@ class PlayerRepositoryImpl @Inject constructor(
             track.albumArtPath ?: currentArt
         }
 
+        val streamMimeType = when (stream.codec?.lowercase()) {
+            "flac" -> androidx.media3.common.MimeTypes.AUDIO_FLAC
+            "aac" -> androidx.media3.common.MimeTypes.AUDIO_AAC
+            "opus" -> androidx.media3.common.MimeTypes.AUDIO_OPUS
+            "mp4", "m4a" -> androidx.media3.common.MimeTypes.AUDIO_MP4
+            else -> null
+        }
+
         return StreamRoutingResult.Item(
             MediaItem.Builder()
                 .setMediaId(track.id.toString())
+                .apply { if (streamMimeType != null) setMimeType(streamMimeType) }
                 // A cloud copy plays through the placeholder, whose source falls back to the stream
                 // chain when the copy won't open; the stash-cloud:// address itself has no fallback.
                 .setUri(

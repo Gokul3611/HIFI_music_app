@@ -235,6 +235,9 @@ class BitchordClient @Inject constructor(
     /** In-flight relay lookups by [cacheKey] + mode; two callers for one song share one request. */
     private val inFlight = ConcurrentHashMap<String, Deferred<TidalLookup>>()
 
+    /** Fast in-memory cache for search match entities to eliminate SQLite disk reads on playback. */
+    private val matchMemoryCache = ConcurrentHashMap<String, TidalMatchEntity>()
+
     @Volatile private var pruned = false
 
     /** True while the pool-busy circuit is open (no relay calls). */
@@ -503,12 +506,16 @@ class BitchordClient @Inject constructor(
         return now - missAt < MISS_TTL_MS
     }
 
-    private suspend fun readCache(key: String): TidalMatchEntity? =
-        runCatching { matchDao.get(key) }
+    private suspend fun readCache(key: String): TidalMatchEntity? {
+        matchMemoryCache[key]?.let { return it }
+        return runCatching { matchDao.get(key) }
+            .onSuccess { if (it != null) matchMemoryCache[key] = it }
             .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; Log.w(TAG, "cache read failed: ${it.javaClass.simpleName}") }
             .getOrNull()
+    }
 
     private suspend fun writeCache(e: TidalMatchEntity) {
+        matchMemoryCache[e.key] = e
         runCatching {
             matchDao.upsert(e)
             if (!pruned) {
