@@ -43,7 +43,7 @@ object PlayerSheetMath {
     const val DEAD_ZONE_DP = 12f
 
     /** Every snap takes this long; only the curve differs by destination. */
-    const val SNAP_MS = 300
+    const val SNAP_MS = 140
 
     /** The rubber band's limits: how far past MINI / the top anchor a drag or an overshoot may go. */
     const val MIN_PROGRESS = -0.05f

@@ -61,8 +61,12 @@ class StreamingPreference @Inject constructor(
     private val forceAmzOnlyKey = booleanPreferencesKey("force_amz_only")
     private val forceArcodOnlyKey = booleanPreferencesKey("force_arcod_only")
 
+    @Volatile private var cachedEnabled: Boolean? = null
+
     val enabled: Flow<Boolean> = context.streamingDataStore.data.map { prefs ->
-        prefs[enabledKey] ?: false
+        val v = prefs[enabledKey] ?: false
+        cachedEnabled = v
+        v
     }
 
     val streamOnCellular: Flow<Boolean> = context.streamingDataStore.data.map { prefs ->
@@ -148,7 +152,12 @@ class StreamingPreference @Inject constructor(
         return false
     }
 
-    suspend fun current(): Boolean = enabled.first()
+    suspend fun current(): Boolean {
+        cachedEnabled?.let { return it }
+        val v = enabled.first()
+        cachedEnabled = v
+        return v
+    }
 
     suspend fun isForceYouTubeFallback(): Boolean = forceYouTubeFallback.first()
 
@@ -158,6 +167,7 @@ class StreamingPreference @Inject constructor(
     suspend fun isSkipQobuz(): Boolean = devForceToggle(skipQobuz, "test_skip_qobuz")
 
     suspend fun setEnabled(value: Boolean) {
+        cachedEnabled = value
         context.streamingDataStore.edit { it[enabledKey] = value }
     }
 

@@ -73,7 +73,7 @@ class PlayerSheetStateTest {
         s.expand()
         assertTrue(s.isWarm)
         assertEquals(PlayerSheetAnchor.FULL, s.targetAnchor)
-        advanceTimeBy(150)
+        advanceTimeBy(70)
         runCurrent()
         assertTrue("mid-flight: ${s.progress}", s.progress > 0f && s.progress < 1f)
         assertEquals(PlayerSheetAnchor.MINI, s.settledAnchor)

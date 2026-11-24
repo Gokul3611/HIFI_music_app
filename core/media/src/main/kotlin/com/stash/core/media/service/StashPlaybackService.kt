@@ -1589,10 +1589,10 @@ class StashPlaybackService : MediaLibraryService() {
         // thresholds keep start-up snappy.
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ 15_000,
-                /* maxBufferMs = */ 50_000,
-                /* bufferForPlaybackMs = */ 200,
-                /* bufferForPlaybackAfterRebufferMs = */ 500,
+                /* minBufferMs = */ 10_000,
+                /* maxBufferMs = */ 30_000,
+                /* bufferForPlaybackMs = */ 50,
+                /* bufferForPlaybackAfterRebufferMs = */ 200,
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()

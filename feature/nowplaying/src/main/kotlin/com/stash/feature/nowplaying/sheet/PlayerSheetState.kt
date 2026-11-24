@@ -366,7 +366,11 @@ class PlayerSheetState(
 @Composable
 fun rememberPlayerSheetState(): PlayerSheetState {
     val scope = rememberCoroutineScope()
-    return rememberSaveable(saver = PlayerSheetState.saver(scope)) { PlayerSheetState(PlayerSheetAnchor.MINI, scope) }
+    return rememberSaveable(saver = PlayerSheetState.saver(scope)) {
+        PlayerSheetState(PlayerSheetAnchor.MINI, scope).apply {
+            isWarm = true
+        }
+    }
 }
 
 /** The app's player sheet; null outside the scaffold (previews, tests). */
