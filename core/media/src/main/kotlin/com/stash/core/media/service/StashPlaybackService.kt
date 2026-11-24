@@ -1553,8 +1553,10 @@ class StashPlaybackService : MediaLibraryService() {
      * DefaultHttpDataSource like the lazy-resolve path.
      */
     private fun cloudHttpDataSource(): androidx.media3.datasource.HttpDataSource =
-        androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(okHttpClient)
+        androidx.media3.datasource.DefaultHttpDataSource.Factory()
             .setUserAgent("Stash")
+            .setConnectTimeoutMs(10_000)
+            .setReadTimeoutMs(30_000)
             .createDataSource()
 
     /**

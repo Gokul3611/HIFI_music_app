@@ -66,7 +66,6 @@ class StreamingMediaSourceFactory @Inject constructor(
     private val resolver: StreamSourceRegistry,
     private val urlCache: StreamUrlCache,
     private val trackDao: TrackDao,
-    private val httpClient: okhttp3.OkHttpClient = okhttp3.OkHttpClient(),
 ) {
     /**
      * False in Download mode, read when each source opens ([DownloadModeGate]): the playback service sets it once. Every
@@ -106,8 +105,11 @@ class StreamingMediaSourceFactory @Inject constructor(
      * the fLaC box's zero sample rate that made FragmentedMp4Extractor fail.
      */
     fun createDashMediaSource(mediaItem: MediaItem, mpdUrl: String): MediaSource {
-        val httpFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(httpClient)
+        val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("Stash/0.9.26")
+            .setConnectTimeoutMs(10_000)
+            .setReadTimeoutMs(30_000)
+            .setAllowCrossProtocolRedirects(false)
         val item = mediaItem.buildUpon()
             .setUri(mpdUrl)
             .setMimeType(MimeTypes.APPLICATION_MPD)
@@ -118,8 +120,8 @@ class StreamingMediaSourceFactory @Inject constructor(
     fun createHlsMediaSource(mediaItem: MediaItem, stream: StreamUrl): MediaSource {
         val current = java.util.concurrent.atomic.AtomicReference(stream.url)
         val trackId = mediaItem.mediaId.toLongOrNull()
-        val http = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(httpClient)
-            .setUserAgent("Stash/0.9.26")
+        val http = DefaultHttpDataSource.Factory().setConnectTimeoutMs(10_000).setReadTimeoutMs(30_000)
+            .setAllowCrossProtocolRedirects(false)
         val source = DataSource.Factory {
             HlsManifestDataSource(http.createDataSource(), stream.url, current, { streamAllowed() },
                 refresh = {
@@ -146,8 +148,10 @@ class StreamingMediaSourceFactory @Inject constructor(
      * wait on the old one's span lock (cast spec 2026-10-06 §4).
      */
     fun createUncachedDataSourceFactory(trackId: Long): DataSource.Factory {
-        val httpFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(httpClient)
+        val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("Stash/0.9.26")
+            .setConnectTimeoutMs(10_000)
+            .setReadTimeoutMs(30_000)
         return DownloadModeGate.gate(
             RefreshingDataSourceFactory(
                 innerFactory = httpFactory,
