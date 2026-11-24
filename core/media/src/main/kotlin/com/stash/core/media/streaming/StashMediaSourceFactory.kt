@@ -84,7 +84,9 @@ class StashMediaSourceFactory(
     // Every network source below is gated when it OPENS ([DownloadModeGate]), not only here when its
     // media source is made: a source made in Stream only and opened after the switch flips is refused.
     // A file on the phone always opens.
-    private val localDataSourceFactory = DownloadModeGate.gate(DefaultDataSource.Factory(context), streamAllowed)
+    private val httpDataSourceFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(httpClient)
+        .setUserAgent("Stash/0.9.26")
+    private val localDataSourceFactory = DownloadModeGate.gate(DefaultDataSource.Factory(context, httpDataSourceFactory), streamAllowed)
     private val localFactory = DefaultMediaSourceFactory(localDataSourceFactory)
 
     internal val jioSaavnHttpClient = httpClient.newBuilder()
@@ -110,9 +112,7 @@ class StashMediaSourceFactory(
                 // Each delegate gated too: a placeholder whose URL was cached opens it without a resolve.
                 httpDelegate = {
                     DownloadModeGate(
-                        DefaultHttpDataSource.Factory().setUserAgent("Stash/0.9.26")
-                            .setConnectTimeoutMs(10_000).setReadTimeoutMs(30_000)
-                            .createDataSource(),
+                        httpDataSourceFactory.createDataSource(),
                         streamAllowed,
                     )
                 },

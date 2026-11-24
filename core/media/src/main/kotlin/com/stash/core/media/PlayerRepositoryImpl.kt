@@ -989,6 +989,22 @@ class PlayerRepositoryImpl @Inject constructor(
         val shuffleOn = controller.shuffleModeEnabled
         val streamOk = streamAllowed()
 
+        val eagerStart = startIndex.coerceIn(0, requested.size - 1)
+        val initialTrack = requested.getOrNull(eagerStart)
+        if (initialTrack != null && !initialTrack.isDownloaded && streamOk) {
+            // Eagerly resolve track 0 concurrently the moment the tap lands:
+            // runs ahead of buildInitialQueue and IPC so LazyResolvingDataSource finds it warm.
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val entity = trackDao.getById(initialTrack.id) ?: initialTrack.toEntity()
+                    val resolved = streamResolver.resolve(entity, allowYouTube = true, allowYtDlp = true)
+                    if (resolved != null) {
+                        streamUrlCache.put(initialTrack.id, resolved)
+                    }
+                } catch (_: Throwable) {}
+            }
+        }
+
         // Full timeline up to QUEUE_WINDOW_SIZE playable songs: EVERY playable track becomes a
         // MediaItem now. Downloaded → file://; stream → stash-resolve:// placeholder resolved
         // just-in-time by LazyResolvingDataSource at open(). Native next/prev/repeat/shuffle are
