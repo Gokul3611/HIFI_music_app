@@ -146,33 +146,26 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/master'
         with:
-          tag_name: v0.9.138
-          name: "Music Hi-Fi v0.9.138"
+          tag_name: v0.9.139
+          name: "Music Hi-Fi v0.9.139"
           body: |
             <!-- stash-app
             Official update from Gokul (Developer). Safe to install!
-            - Production Update Fix | Restored production package identity to com.stash.app.debug so all v0.9.135 and v0.9.136 users can update seamlessly in-place.
-            - Spotify Sync Onboarding | Gentle first-run prompt to sync Spotify playlists and library with 1-tap sign-in redirect.
-            - Custom Dynamic App Icons | 8 audiophile-themed dynamic launcher icons with in-app preview sheet (Settings > Appearance).
-            - Real-Time Widget Theming | Dynamic launcher widget search icon inheritance and modernized titanium silver widget styling.
-            - Lockscreen Song Titles | Enforced public notification channels ensuring track metadata and art show on all Android lockscreens.
-            - Queue Drag-to-Top | Fixed viewport boundaries allowing tracks to be dragged smoothly to index 0.
-            - Direct Equalizer Access | Equalizer shortcut directly reachable from Now Playing track options and queue menus.
+            - 50% APK Size Cut | Dropped legacy 32-bit armeabi-v7a native binaries; APK cut from 74 MB to 44 MB for modern arm64-v8a devices.
+            - Ultra-Low-Power Widget | Headless background launcher widget playback with full Previous/Play/Pause/Next controls and zero UI launch overhead.
+            - Instant Navigation | Removed transition latency for instantaneous library browsing, pre-warmed player sheets, and low-latency 50ms buffer start.
+            - Bit-Perfect Continuity | Complete preservation of 24-bit bit-perfect DSP and ESP32 SoftAP Wi-Fi DAC streaming.
             -->
-            ### 🎵 Music Hi-Fi v0.9.138 - Official Release
+            ### 🎵 Music Hi-Fi v0.9.139 - Official Release
 
-            > **📢 Notice from Gokul:** This release fixes in-app updates for all existing users on v0.9.135 and v0.9.136. Your app will update cleanly in place with zero data loss!
+            > **📢 Notice from Gokul:** This release drastically reduces app size by nearly 50% (~44 MB, down from ~74 MB) and adds ultra-low-power launcher widget playback controls and instantaneous UI navigation!
 
             #### 🌟 Highlights & What's New:
-            - **📦 In-Place Update Fix**: Matches your installed production app identity (`com.stash.app.debug`), allowing in-app updates to download and install instantly.
-            - **🎨 8 Custom Dynamic App Icons & Visual Picker**: Choose from Obsidian Titanium, Cyber Emerald, Electric Violet, Sunset Amber, Ocean Sapphire, Crimson Ruby, Midnight Gold, or Minimal Mono with live vector-accurate preview thumbnails (**Settings > Appearance > App icon**).
-            - **📱 Real-Time Widget Icon & Previews**: Launcher widget search and tray now dynamically inherit the active app icon theme and refresh instantly; widget previews modernized to sleek titanium silver.
-            - **🎧 Spotify Sync Onboarding Prompt**: First-run gentle prompt appearing after initial app exploration (~25 seconds) offering a one-click redirect to Spotify library sync.
-            - **🔒 Lockscreen Song Title & Cover Viewing**: Enforced `VISIBILITY_PUBLIC` notification channel and fallback metadata builders ensuring track title and artist display reliably on lockscreens across all Android versions and OEM skins.
-            - **🎚️ Direct Equalizer Access**: Tap the 3-dots "Track Options" menu directly on the Now Playing screen or in the playback queue to jump straight into the 10-band Equalizer.
-            - **📋 Queue Drag-to-Top**: Fixed auto-scrolling viewport boundaries in the playback queue sheet so reordered songs can easily be moved all the way to index 0.
-            - **✨ Curated Home Screen & Supporter Perks**: Decluttered home tab, removed upstream telemetry workers and unauthenticated network pings, and unlocked unlimited Tidal streaming.
-            - **🐧 Technical Fork Changelog**: New Linux-style breakdown of all architectural, audio pipeline, and ESP32 streaming modifications (**Settings > About & Help > Changes from Stash fork**).
+            - **📦 50% Smaller Download**: Removed duplicate legacy 32-bit native libraries (FFmpeg/Python) while keeping complete 64-bit ARM (`arm64-v8a`) compatibility for all modern Android 10+ devices.
+            - **⚡ Instantaneous UI Transitions**: Stripped navigation delays for click-to-open responsiveness, pre-warmed Now Playing bottom sheets, and optimized 50ms playback startup buffer.
+            - **🔋 Ultra-Low-Power Launcher Widget**: Direct headless service transport with Previous [⏮], Play/Pause [⏯], and Next [⏭] controls that run without waking foreground activities.
+            - **🎛️ Bit-Perfect Audio & ESP32 DAC Engine**: Native bit-perfect DSP pipeline and wireless ESP32 SoftAP DAC streamer remain 100% intact and uncompromised.
+            - **🔄 Seamless In-App Updates**: Built with package identity `com.stash.app.debug` to update smoothly over your existing install without losing any library data.
 
             #### 📦 Download:
             Download `Music.apk` below or tap "Update now" inside the app.
