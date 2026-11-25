@@ -8,11 +8,13 @@ on:
       - feature/spotify-sync-onboarding-prompt
       - feature/custom-app-icons
       - feature/widget-ultra-low-power-playback
+      - feature/esp32-playback-fixes
   pull_request:
     branches:
       - master
       - feature/custom-app-icons
       - feature/widget-ultra-low-power-playback
+      - feature/esp32-playback-fixes
 
 permissions:
   contents: write
@@ -129,18 +131,18 @@ jobs:
 
       - name: Create or Update Test GitHub Release
         uses: softprops/action-gh-release@v2
-        if: github.ref == 'refs/heads/feature/spotify-sync-onboarding-prompt' || github.ref == 'refs/heads/feature/custom-app-icons' || github.ref == 'refs/heads/feature/widget-ultra-low-power-playback'
+        if: github.ref == 'refs/heads/feature/spotify-sync-onboarding-prompt' || github.ref == 'refs/heads/feature/custom-app-icons' || github.ref == 'refs/heads/feature/widget-ultra-low-power-playback' || github.ref == 'refs/heads/feature/esp32-playback-fixes'
         with:
           tag_name: test-build
-          name: "Music Hi-Fi Test Build (Widget Ultra-Low-Power Playback)"
+          name: "Music Hi-Fi Test Build (ESP32 Playback Fixes)"
           prerelease: true
           make_latest: false
           body: |
-            🧪 **Test Build for Gokul: Ultra-Low-Power Headless Widget Playback**
-            - **Direct Headless Playback**: Tapping widget controls never opens the app or launches activities; runs directly via the audio service.
-            - **Micro-Amp / Sensor-Node Mode**: Strips cover art loading, bitmap decoding, and background Discord RPC overhead.
-            - **Full Track Controls**: Added Previous [⏮], Hero Play/Pause [⏯], and Next [⏭] controls.
-            - **Modern Hi-Fi Audio Console**: Sleek obsidian UI with "HI-FI DIRECT" status indicator and uncompromised bit-perfect audio quality.
+            🧪 **Test Build for Gokul: ESP32 Playback Fixes**
+            - **No Decoder Stalls**: Paced Media3 ExoPlayer with ConvertingWriter 2048-frame chunks so songs play continuously at 1x real-time speed.
+            - **Zero Dropped Audio**: Removed chunk dropping; continuous audio transmission.
+            - **Boot Deadlock Resolved**: FreeRTOS handshake task handle guarded so ESP32 boots and connects immediately.
+            - **Dead Silence When Idle**: Auto-clears DMA descriptors on underrun and drives 0V ground silence to kill RF noise/hum.
           files: dist/Music.apk
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
