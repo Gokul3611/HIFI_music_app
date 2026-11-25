@@ -204,23 +204,38 @@ static bool isSupportedSampleRate(uint32_t sample_rate) {
 /**
  * Feeds DC-safe silence to the active output without causing speaker pops:
  *   - For External PCM5102A: writes zeroed DMA (0 V true digital ground).
- *   - For Internal DAC: writes mid-scale 0x8000 (1.65 V DC mid-rail) so the DAC
- *     does not violently step between 1.65 V and 0 V.
+ *   - For Internal DAC: writes mid-scale 0x8000 (1.65 V DC mid-rail) during active stream
+ *     prebuffering/starvation so voltage does not fluctuate or cause zipper scratching.
  */
 static void outputDmaSilence(uint8_t mode) {
     if (mode == MODE_INTERNAL_ESP32_DAC) {
-        // Pop-free smooth ramp-down to 0V ground: eliminates DC bias current, hum, and RF whine when idle
         uint16_t silence[64];
+        uint16_t bias = (s_active_bias > 0) ? 0x8000 : 0x0000;
         for (size_t i = 0; i < 64; i++) {
-            if (s_active_bias > 0) {
-                s_active_bias = (s_active_bias >= 256) ? (s_active_bias - 256) : 0;
-            }
-            silence[i] = static_cast<uint16_t>(s_active_bias & 0xFF00);
+            silence[i] = bias;
         }
         size_t written = 0;
         i2s_write(I2S_PORT, silence, sizeof(silence), &written, pdMS_TO_TICKS(10));
     } else {
         i2s_zero_dma_buffer(I2S_PORT);
+    }
+}
+
+/**
+ * Smoothly ramps down the internal DAC DC bias to true 0V ground when idle/disconnected.
+ * Eliminates DC current drain through headphones, background RF whine, and speaker thump.
+ */
+static void rampDownBiasToGround() {
+    if (getActiveMode() != MODE_INTERNAL_ESP32_DAC || s_active_bias == 0) return;
+    uint16_t silence[64];
+    while (s_active_bias > 0) {
+        for (size_t i = 0; i < 64; i++) {
+            if (s_active_bias >= 128) s_active_bias -= 128;
+            else s_active_bias = 0;
+            silence[i] = static_cast<uint16_t>(s_active_bias & 0xFF00);
+        }
+        size_t written = 0;
+        i2s_write(I2S_PORT, silence, sizeof(silence), &written, pdMS_TO_TICKS(10));
     }
 }
 
@@ -393,36 +408,33 @@ void audioWorkerTask(void *param) {
             // Built-in DAC consumes the high 8 bits of each 16-bit slot.
             // 1. TPDF dither: Extracts two uniform 8-bit random variables from upper bits of a single fast_rand32().
             // 2. DC-bias correction: +128 offset ensures symmetric rounding around 0x8000 midscale silence.
-            // 3. Channel order: i ^ 1 handles ESP32 legacy I2S FIFO 32-bit halfword swap for proper L/R channel mapping.
-            // 4. Pop-free dynamic bias ramp: smoothly raises bias from 0V to 1.65V over 256 samples on startup.
+            // 3. Sequential stereo indexing: Left and Right channels mapped directly without halfword inversion.
+            // 4. Headroom scaling: ~1.2 dB headroom (28800 / 32768) prevents digital peak clipping and analog rail saturation.
+            // 5. Pop-free dynamic bias ramp: smoothly raises bias from 0V to 1.65V over 512 samples on startup.
             const int32_t *input = reinterpret_cast<const int32_t *>(s_dma_chunk);
             const size_t sample_count = DMA_CHUNK_SIZE / sizeof(int32_t);
 
-            if (s_active_bias < 0x8000) {
-                for (size_t i = 0; i < sample_count; i++) {
-                    if (s_active_bias < 0x8000) {
-                        s_active_bias += 128;
-                        if (s_active_bias > 0x8000) s_active_bias = 0x8000;
-                    }
-                    int32_t s16 = input[i] >> 16;
-                    uint32_t r = fast_rand32();
-                    int32_t dither = static_cast<int32_t>(r >> 24) - static_cast<int32_t>((r >> 16) & 0xFF);
-                    int32_t scaled_audio = (s16 * static_cast<int32_t>(s_active_bias)) >> 15;
-                    int32_t val = scaled_audio + dither + s_active_bias + 128;
-                    if (val < 0) val = 0;
-                    else if (val > 65535) val = 65535;
-                    s_dac_chunk[i ^ 1] = static_cast<uint16_t>(val & 0xFF00);
+            for (size_t i = 0; i < sample_count; i++) {
+                if (s_active_bias < 0x8000) {
+                    s_active_bias += 64; // Smooth ~10ms ramp-up to 1.65V on new stream
+                    if (s_active_bias > 0x8000) s_active_bias = 0x8000;
                 }
-            } else {
-                for (size_t i = 0; i < sample_count; i++) {
-                    int32_t s16 = input[i] >> 16; // 16-bit signed [-32768, 32767]
-                    uint32_t r = fast_rand32();
-                    int32_t dither = static_cast<int32_t>(r >> 24) - static_cast<int32_t>((r >> 16) & 0xFF);
-                    int32_t val = s16 + dither + 32768 + 128; // Unsigned with +128 rounding
-                    if (val < 0) val = 0;
-                    else if (val > 65535) val = 65535;
-                    s_dac_chunk[i ^ 1] = static_cast<uint16_t>(val & 0xFF00);
+
+                int32_t s16 = input[i] >> 16; // 16-bit signed [-32768, 32767]
+
+                // Scale to 28800 to prevent digital peak clipping and keep within linear DAC range
+                int32_t scaled = (s16 * 28800) >> 15;
+                if (s_active_bias < 0x8000) {
+                    scaled = (scaled * static_cast<int32_t>(s_active_bias)) >> 15;
                 }
+
+                uint32_t r = fast_rand32();
+                int32_t dither = static_cast<int32_t>(r >> 24) - static_cast<int32_t>((r >> 16) & 0xFF);
+                int32_t val = scaled + dither + s_active_bias + 128;
+                if (val < 0) val = 0;
+                else if (val > 65535) val = 65535;
+
+                s_dac_chunk[i] = static_cast<uint16_t>(val & 0xFF00);
             }
             output = reinterpret_cast<const uint8_t *>(s_dac_chunk);
             output_length = sample_count * sizeof(uint16_t);
@@ -743,7 +755,7 @@ void loop() {
         client.stop();
 
         pauseAudioWorker();
-        outputDmaSilence(getActiveMode());
+        rampDownBiasToGround();
         rb_reset(true);
         resumeAudioWorker();
 
