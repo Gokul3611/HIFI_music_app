@@ -91,15 +91,16 @@ static bool s_i2s_initialized = false;
 static volatile bool s_worker_pause_requested = false;
 static SemaphoreHandle_t s_worker_paused = nullptr;
 static SemaphoreHandle_t s_worker_resume = nullptr;
+static TaskHandle_t s_audio_worker_task = nullptr;
 
 static void pauseAudioWorker() {
-    if (s_worker_paused == nullptr || s_worker_resume == nullptr) return;
+    if (s_audio_worker_task == nullptr || s_worker_paused == nullptr || s_worker_resume == nullptr) return;
     __atomic_store_n(&s_worker_pause_requested, true, __ATOMIC_RELEASE);
     xSemaphoreTake(s_worker_paused, portMAX_DELAY); // Wait for worker to safely park
 }
 
 static void resumeAudioWorker() {
-    if (s_worker_paused == nullptr || s_worker_resume == nullptr) return;
+    if (s_audio_worker_task == nullptr || s_worker_paused == nullptr || s_worker_resume == nullptr) return;
     __atomic_store_n(&s_worker_pause_requested, false, __ATOMIC_RELEASE);
     xSemaphoreGive(s_worker_resume); // Let worker resume streaming
 }
@@ -205,13 +206,13 @@ static bool isSupportedSampleRate(uint32_t sample_rate) {
  */
 static void outputDmaSilence(uint8_t mode) {
     if (mode == MODE_INTERNAL_ESP32_DAC) {
-        // Output mid-scale silence on stack (zero BSS DRAM footprint)
+        // Output 0V (ground) silence: eliminates DC bias current, hum, and RF whine when not playing
         uint16_t silence[64];
         for (size_t i = 0; i < 64; i++) {
-            silence[i] = 0x8000;
+            silence[i] = 0x0000;
         }
         size_t written = 0;
-        for (int b = 0; b < 16; b++) {
+        for (int b = 0; b < 4; b++) {
             i2s_write(I2S_PORT, silence, sizeof(silence), &written, pdMS_TO_TICKS(10));
         }
     } else {
@@ -234,8 +235,8 @@ static esp_err_t installI2SHardware(uint8_t mode, uint32_t sample_rate) {
         i2s_config.communication_format = I2S_COMM_FORMAT_STAND_I2S;
         i2s_config.use_apll = true;
     } else {
-        // In internal DAC mode, tx_desc_auto_clear must be false to prevent DMA from auto-clearing to 0x0000 (0V thump)
-        i2s_config.tx_desc_auto_clear = false;
+        // Auto-clear DMA descriptors to prevent repeating stale audio on underrun
+        i2s_config.tx_desc_auto_clear = true;
         i2s_config.mode = (i2s_mode_t)(i2s_config.mode | I2S_MODE_DAC_BUILT_IN);
         i2s_config.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
         i2s_config.communication_format = I2S_COMM_FORMAT_STAND_MSB;
@@ -360,17 +361,17 @@ void audioWorkerTask(void *param) {
         uint32_t active_rate = getActiveSampleRate();
         size_t watermark = getPrebufferWatermark(active_rate);
         size_t available = rb_available_read();
+        uint8_t mode = getActiveMode();
 
         // Anti-crackle pre-buffering: ensure adaptive cushion before draining ring buffer
         if (s_prebuffering) {
             if (available < watermark) {
+                outputDmaSilence(mode);
                 vTaskDelay(pdMS_TO_TICKS(2));
                 continue;
             }
             s_prebuffering = false;
         }
-
-        uint8_t mode = s_active_mode;
 
         // Buffer starvation protection: if drained below chunk size, output silence and pre-buffer again
         if (available < DMA_CHUNK_SIZE) {
@@ -546,7 +547,7 @@ void setup() {
         6144,
         NULL,
         12,
-        NULL,
+        &s_audio_worker_task,
         1
     );
     if (task_created != pdPASS) {

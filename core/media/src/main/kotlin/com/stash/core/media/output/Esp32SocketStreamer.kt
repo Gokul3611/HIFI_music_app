@@ -170,10 +170,13 @@ object Esp32SocketStreamer {
     private val connectionLock = Any()
     private var connectionGeneration = 0L
 
-    // Decoupled asynchronous transmission queue to guarantee zero blocking on ExoPlayer audio thread
+    // Decoupled asynchronous transmission queue with backpressure pacing
     private data class AudioChunk(val bytes: ByteArray, val sampleRateHz: Int)
-    private val sendQueue = java.util.concurrent.LinkedBlockingQueue<AudioChunk>(48)
+    private val sendQueue = java.util.concurrent.LinkedBlockingQueue<AudioChunk>(64)
     @Volatile private var senderThread: Thread? = null
+
+    /** Returns true if the streamer is connected and has room in the transmission queue. */
+    fun hasCapacity(): Boolean = isConnected.get() && sendQueue.remainingCapacity() > 4
 
     private fun startSenderThread(os: OutputStream, generation: Long) {
         senderThread?.interrupt()
@@ -518,13 +521,12 @@ object Esp32SocketStreamer {
                 }
             }
 
-            // Non-blocking hand-off to dedicated network thread (Zero ExoPlayer thread stalling)
+            // Hand off chunk to transmission queue with bounded wait (no frame drops)
             val chunk = ByteArray(byteCount)
             System.arraycopy(outBytes, 0, chunk, 0, byteCount)
             val queued = AudioChunk(chunk, sampleRateHz)
-            if (!sendQueue.offer(queued)) {
-                sendQueue.poll() // drop oldest chunk to stay locked to real-time low latency
-                sendQueue.offer(queued)
+            if (!sendQueue.offer(queued, 150, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                Log.w(TAG, "sendQueue saturated; pace backpressure applied")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Socket write error: ${e.message}. Reconnecting...")

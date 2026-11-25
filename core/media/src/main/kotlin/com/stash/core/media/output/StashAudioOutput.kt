@@ -90,22 +90,6 @@ class StashAudioOutput(
     /** [stop] came for this stream (end of stream); only a flush starts it again. */
     private var stopping = false
 
-    private var silentBuffer: ByteBuffer? = null
-
-    private fun getSilentBuffer(size: Int): ByteBuffer {
-        var buf = silentBuffer
-        if (buf == null || buf.capacity() < size) {
-            buf = ByteBuffer.allocateDirect(maxOf(size, 16384)).order(ByteOrder.nativeOrder())
-            silentBuffer = buf
-        }
-        buf.clear()
-        buf.limit(size)
-        for (i in 0 until size) {
-            buf.put(i, 0.toByte())
-        }
-        return buf
-    }
-
     @Volatile private var replanRequested = false
 
     /** The reference this stream is audibly retuned to (null: not retuned), as last published. */
@@ -195,18 +179,32 @@ class StashAudioOutput(
 
         // ESP32 Wi-Fi Direct: Stream uncompressed 32-bit PCM to ESP32 socket
         if (controller.mode == com.stash.core.data.prefs.HiResOutputMode.ESP32_WIFI_DIRECT) {
-            Esp32SocketStreamer.writePcm(buffer, inFormat, streamSampleRate)
+            if (!Esp32SocketStreamer.hasCapacity()) {
+                return false
+            }
             inner.setVolume(0f)
 
-            // Feed pure silence to inner AudioTrack so headphones/speaker produce 0 sound,
-            // while Media3 position, lyrics, and progress bar advance normally.
-            val remaining = buffer.remaining()
-            val silent = getSilentBuffer(remaining)
-            inner.write(silent, encodedAccessUnitCount, presentationTimeUs)
-            buffer.position(buffer.limit())
-            framesWritten += remaining / inFrameSize
-            publishTuning()
-            return true
+            val view = buffer.duplicate().order(ByteOrder.nativeOrder())
+
+            // Use ConvertingWriter to pace in exact-sized chunks (2048 frames) that fit the AudioTrack buffer,
+            // feeding silence to inner AudioTrack so clock/seekbar/lyrics advance at 1x real-time speed.
+            val handled = writer.write(
+                buffer,
+                process = { samples, _ ->
+                    samples.fill(0f)
+                },
+                sink = { out -> inner.write(out, 1, presentationTimeUs) },
+            )
+
+            val consumed = buffer.position() - before
+            if (consumed > 0) {
+                view.position(before)
+                view.limit(before + consumed)
+                Esp32SocketStreamer.writePcm(view, inFormat, streamSampleRate)
+                framesWritten += consumed / inFrameSize
+                publishTuning()
+            }
+            return handled
         }
 
         val handled = if (!writer.hasPending && !dspOn && !softVolume && inFormat == outFormat) {
