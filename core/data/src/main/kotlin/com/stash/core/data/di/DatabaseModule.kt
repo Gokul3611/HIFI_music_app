@@ -33,15 +33,7 @@ object DatabaseModule {
             StashDatabase::class.java,
             StashDatabase.DATABASE_NAME,
         )
-            // Single source of truth for the chain — DatabaseBackupManager's
-            // merge-import opens a second Room instance over a staged backup
-            // file with this same array, so an older backup can be rolled
-            // forward to the live schema before rows are copied out of it.
             .addMigrations(*StashDatabase.ALL_MIGRATIONS)
-            // No fallbackToDestructiveMigration() — if a migration is missing,
-            // the app will crash on startup instead of silently wiping the
-            // user's entire library. This forces us to write proper migrations
-            // for every schema change. The crash is preferable to data loss.
             .build()
     }
 

@@ -27,7 +27,11 @@ object WidgetKeyRelay {
     private const val EXTRA_KEY_CODE = "com.stash.extra.WIDGET_MEDIA_KEY"
 
     /** The keys a relayed tap may carry; anything else is ignored. */
-    private val RELAYED_KEYS = setOf(KeyEvent.KEYCODE_MEDIA_PAUSE, KeyEvent.KEYCODE_MEDIA_NEXT)
+    private val RELAYED_KEYS = setOf(
+        KeyEvent.KEYCODE_MEDIA_PAUSE,
+        KeyEvent.KEYCODE_MEDIA_NEXT,
+        KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+    )
 
     /** What the receiver does with one relayed tap. */
     sealed interface Route {

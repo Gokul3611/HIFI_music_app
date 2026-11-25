@@ -227,12 +227,10 @@ android {
             buildConfigField("String", "SYNC_BASE_URL", "\"$syncReleaseBaseUrl\"")
             buildConfigField("Boolean", "WEB_LINK_ENABLED", "false")
             manifestPlaceholders["webLinkEnabled"] = "false"
-            // ARM only in the release APK. x86/x86_64 were ~71 MB of the universal APK (each ABI
-            // carries its own ffmpeg + python zips) for CPUs no phone at minSdk 26 has. This filters
-            // the AAR libs as well as app/src/main/jniLibs. Still one Stash.apk, so the in-app updater
-            // (first .apk asset) and releases/latest/download/Stash.apk keep working. Debug stays
-            // universal so x86_64 emulators can run it.
-            ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+            // 64-bit ARM only in the release APK (arm64-v8a). 32-bit armeabi-v7a was ~36 MB of duplicate
+            // native binaries (ffmpeg, python) for legacy 2014-2016 CPUs. All modern Android 10+ devices
+            // run arm64-v8a. Dropping armeabi-v7a cuts APK size from ~74 MB to ~38 MB.
+            ndk { abiFilters += listOf("arm64-v8a") }
             // R8 shrinks the release build: it drops the code and resources nothing uses (most of
             // material-icons-extended, unused library code) and optimizes the rest, but renames
             // nothing (-dontobfuscate). app/proguard-rules.pro says why each keep rule is there; a
@@ -297,6 +295,19 @@ android {
             // Must extract native libs to disk so ffmpeg/ffprobe executables and
             // libc++_shared.so are in the same directory and can be linked at runtime.
             useLegacyPackaging = true
+        }
+        resources {
+            excludes += listOf(
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/LICENSE.txt",
+                "META-INF/license.txt",
+                "META-INF/NOTICE",
+                "META-INF/NOTICE.txt",
+                "META-INF/notice.txt",
+                "META-INF/ASL2.0",
+                "META-INF/*.kotlin_module",
+            )
         }
     }
 }

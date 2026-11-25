@@ -16,9 +16,10 @@ class WidgetControlsTest {
     }
 
     @Test
-    fun `playing with the service up - Pause and Next as plain service starts, like the notification`() {
+    fun `playing with the service up - Pause, Next and Prev as plain service starts, like the notification`() {
         val buttons = WidgetControls.of(song, serviceRunning = true)!!
         assertThat(buttons.showsPause).isTrue()
+        assertThat(buttons.previous).isEqualTo(WidgetTransport(KeyEvent.KEYCODE_MEDIA_PREVIOUS, foreground = false))
         assertThat(buttons.playPause).isEqualTo(WidgetTransport(KeyEvent.KEYCODE_MEDIA_PAUSE, foreground = false))
         assertThat(buttons.next).isEqualTo(WidgetTransport(KeyEvent.KEYCODE_MEDIA_NEXT, foreground = false))
     }
@@ -39,6 +40,14 @@ class WidgetControlsTest {
     }
 
     @Test
+    fun `paused - Previous skips previous then plays, in the foreground`() {
+        val buttons = WidgetControls.of(song.copy(isPlaying = false), serviceRunning = true)!!
+        assertThat(buttons.previous).isEqualTo(
+            WidgetTransport(KeyEvent.KEYCODE_MEDIA_PLAY, foreground = true, skipPrevious = true),
+        )
+    }
+
+    @Test
     fun `a stored playing is not believed once the service is gone (process death, idle stop)`() {
         val buttons = WidgetControls.of(song, serviceRunning = false)!!
         assertThat(buttons.showsPause).isFalse()
@@ -46,13 +55,15 @@ class WidgetControlsTest {
         assertThat(buttons.playPause.keyCode).isEqualTo(KeyEvent.KEYCODE_MEDIA_PLAY)
         assertThat(buttons.next.skipFirst).isTrue()
         assertThat(buttons.next.foreground).isTrue()
+        assertThat(buttons.previous.skipPrevious).isTrue()
+        assertThat(buttons.previous.foreground).isTrue()
     }
 
     @Test
     fun `every foreground start ends in a Play key (Android needs the notification within seconds)`() {
         for (playing in listOf(true, false)) for (running in listOf(true, false)) {
             val buttons = WidgetControls.of(song.copy(isPlaying = playing), running)!!
-            for (t in listOf(buttons.playPause, buttons.next)) {
+            for (t in listOf(buttons.previous, buttons.playPause, buttons.next)) {
                 if (t.foreground) assertThat(t.keyCode).isEqualTo(KeyEvent.KEYCODE_MEDIA_PLAY)
             }
         }

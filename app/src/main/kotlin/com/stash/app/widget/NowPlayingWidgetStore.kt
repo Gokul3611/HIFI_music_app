@@ -119,18 +119,9 @@ class NowPlayingWidgetStore @Inject constructor(
     }
 
     /**
-     * Fetches the stored song's cover if it isn't on hand ([WidgetCoverPolicy.wanted]). The fetch
-     * runs outside the lock, so publishes go on meanwhile; its result is kept only if the song is
-     * still the same.
+     * Bypassed in ultra-low-power mode: widget does not fetch or cache cover images.
      */
-    suspend fun refreshCover(): CoverRefresh {
-        val url = locked {
-            val s = stored!!
-            WidgetCoverPolicy.wanted(s.state?.artUrl, s.coverKey, haveCover = coverBitmap != null, failedKey = failedCoverKey)
-        } ?: return CoverRefresh.UP_TO_DATE
-        val result = coverLoader.load(url)
-        return locked { applyCover(url, result) }
-    }
+    suspend fun refreshCover(): CoverRefresh = CoverRefresh.UP_TO_DATE
 
     /** The service stopped: the stored song is paused. Returns whether that changed anything. */
     suspend fun markPaused(): Boolean = locked {

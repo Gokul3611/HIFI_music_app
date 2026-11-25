@@ -22,6 +22,7 @@ class WidgetKeyRelayTest {
         override fun onReceive(context: Context?, intent: Intent?) = Unit
     }
 
+    private val prev = WidgetTransport(KeyEvent.KEYCODE_MEDIA_PREVIOUS, foreground = false)
     private val pause = WidgetTransport(KeyEvent.KEYCODE_MEDIA_PAUSE, foreground = false)
     private val next = WidgetTransport(KeyEvent.KEYCODE_MEDIA_NEXT, foreground = false)
 
@@ -36,12 +37,14 @@ class WidgetKeyRelayTest {
 
     @Test
     fun `with the service alive the key is forwarded as it was tapped`() {
+        assertThat(WidgetKeyRelay.route(relay(prev), serviceAlive = true)).isEqualTo(WidgetKeyRelay.Route.Forward(prev))
         assertThat(WidgetKeyRelay.route(relay(pause), serviceAlive = true)).isEqualTo(WidgetKeyRelay.Route.Forward(pause))
         assertThat(WidgetKeyRelay.route(relay(next), serviceAlive = true)).isEqualTo(WidgetKeyRelay.Route.Forward(next))
     }
 
     @Test
     fun `with the service gone (a crash left Pause showing) the widget is redrawn instead`() {
+        assertThat(WidgetKeyRelay.route(relay(prev), serviceAlive = false)).isEqualTo(WidgetKeyRelay.Route.Redraw)
         assertThat(WidgetKeyRelay.route(relay(pause), serviceAlive = false)).isEqualTo(WidgetKeyRelay.Route.Redraw)
         assertThat(WidgetKeyRelay.route(relay(next), serviceAlive = false)).isEqualTo(WidgetKeyRelay.Route.Redraw)
     }
@@ -60,7 +63,7 @@ class WidgetKeyRelayTest {
     fun `every relayed button the controls produce routes to a forward`() {
         val playing = NowPlayingWidgetState("Song", "Artist", null, isPlaying = true)
         val buttons = WidgetControls.of(playing, serviceRunning = true)!!
-        for (transport in listOf(buttons.playPause, buttons.next)) {
+        for (transport in listOf(buttons.previous, buttons.playPause, buttons.next)) {
             assertThat(transport.foreground).isFalse()
             assertThat(WidgetKeyRelay.route(relay(transport), serviceAlive = true)).isEqualTo(WidgetKeyRelay.Route.Forward(transport))
         }

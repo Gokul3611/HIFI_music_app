@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Centered title for square widget (Space Grotesk Bold, 16sp). The colour is set in code. -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_text"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:ellipsize="end"
+    android:gravity="center"
+    android:fontFamily="@font/space_grotesk_bold"
+    android:includeFontPadding="false"
+    android:letterSpacing="0.005"
+    android:maxLines="2"
+    android:textSize="16sp" />

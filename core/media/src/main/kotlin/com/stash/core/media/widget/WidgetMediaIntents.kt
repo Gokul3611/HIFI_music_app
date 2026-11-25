@@ -24,16 +24,40 @@ object WidgetMediaIntents {
      */
     const val EXTRA_SKIP_FIRST = "com.stash.extra.WIDGET_SKIP_FIRST"
 
+    /**
+     * Boolean extra on a widget Previous that has to start playback: the service skips to previous song
+     * before the Play key is handled, or, when it has nothing loaded, resumes the saved queue one song back.
+     */
+    const val EXTRA_SKIP_PREVIOUS = "com.stash.extra.WIDGET_SKIP_PREVIOUS"
+
+    /**
+     * Boolean extra indicating that playback was triggered from the home screen widget.
+     * When present, the service runs in ultra-low-power mode without UI or unnecessary overheads.
+     */
+    const val EXTRA_WIDGET_PLAYBACK = "com.stash.extra.WIDGET_PLAYBACK"
+
     /** The media-button intent for [transport]. */
     fun mediaButton(context: Context, transport: WidgetTransport): Intent =
         Intent(Intent.ACTION_MEDIA_BUTTON)
             .setComponent(ComponentName(context, StashPlaybackService::class.java))
             .putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, transport.keyCode))
-            .apply { if (transport.skipFirst) putExtra(EXTRA_SKIP_FIRST, true) }
+            .putExtra(EXTRA_WIDGET_PLAYBACK, true)
+            .apply {
+                if (transport.skipFirst) putExtra(EXTRA_SKIP_FIRST, true)
+                if (transport.skipPrevious) putExtra(EXTRA_SKIP_PREVIOUS, true)
+            }
 
     /** True for a widget Next that asks the service to skip one song before playing. */
     fun isSkipFirst(intent: Intent?): Boolean =
         intent?.action == Intent.ACTION_MEDIA_BUTTON && intent.getBooleanExtra(EXTRA_SKIP_FIRST, false)
+
+    /** True for a widget Previous that asks the service to skip to the previous song before playing. */
+    fun isSkipPrevious(intent: Intent?): Boolean =
+        intent?.action == Intent.ACTION_MEDIA_BUTTON && intent.getBooleanExtra(EXTRA_SKIP_PREVIOUS, false)
+
+    /** True when the media button intent was triggered from the widget. */
+    fun isWidgetPlayback(intent: Intent?): Boolean =
+        intent?.getBooleanExtra(EXTRA_WIDGET_PLAYBACK, false) == true
 
     /**
      * Opens the app on Now Playing: the media notification's own intent (see

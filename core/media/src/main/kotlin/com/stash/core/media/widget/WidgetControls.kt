@@ -19,12 +19,15 @@ data class WidgetTransport(
     val foreground: Boolean,
     /** Skip to the next song first (see [WidgetMediaIntents.EXTRA_SKIP_FIRST]). */
     val skipFirst: Boolean = false,
+    /** Skip to the previous song first (see [WidgetMediaIntents.EXTRA_SKIP_PREVIOUS]). */
+    val skipPrevious: Boolean = false,
 )
 
-/** The widget's two buttons for one state. */
+/** The widget's track controls for one state. */
 data class WidgetButtons(
     /** Show the Pause glyph (else Play). */
     val showsPause: Boolean,
+    val previous: WidgetTransport,
     val playPause: WidgetTransport,
     val next: WidgetTransport,
 )
@@ -58,12 +61,14 @@ object WidgetControls {
         return if (state.isPlaying && serviceRunning) {
             WidgetButtons(
                 showsPause = true,
+                previous = WidgetTransport(KeyEvent.KEYCODE_MEDIA_PREVIOUS, foreground = false),
                 playPause = WidgetTransport(KeyEvent.KEYCODE_MEDIA_PAUSE, foreground = false),
                 next = WidgetTransport(KeyEvent.KEYCODE_MEDIA_NEXT, foreground = false),
             )
         } else {
             WidgetButtons(
                 showsPause = false,
+                previous = WidgetTransport(KeyEvent.KEYCODE_MEDIA_PLAY, foreground = true, skipPrevious = true),
                 playPause = WidgetTransport(KeyEvent.KEYCODE_MEDIA_PLAY, foreground = true),
                 next = WidgetTransport(KeyEvent.KEYCODE_MEDIA_PLAY, foreground = true, skipFirst = true),
             )

@@ -717,7 +717,7 @@ class LibraryViewModel @Inject constructor(
             // Download mode: a downloaded tap queues only downloaded rows, so offline playback
             // never walks into online neighbours. Stream-only: every row shown is playable, so
             // the queue is exactly the list shown, whatever row was tapped.
-            val streaming = streamingPreference.enabled.first()
+            val streaming = streamingPreference.current()
             val playable = if (!streaming && track.isDownloaded) {
                 allTracks.filter { it.isDownloaded }
             } else {
