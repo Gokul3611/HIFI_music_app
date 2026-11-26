@@ -195,6 +195,9 @@ interface PlayerRepository {
      * nothing downloaded to shuffle (caller surfaces the why). */
     suspend fun shuffleLibrary(): Boolean
 
+    /** AI Smart Shuffle: sequences downloaded tracks into a smooth, genre-continuous flow. */
+    suspend fun shuffleLibraryAi(): Boolean = false
+
     /**
      * Insert [track] immediately after the currently-playing track in the queue.
      * Playback continues uninterrupted; the inserted track will play next.

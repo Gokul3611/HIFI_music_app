@@ -1561,6 +1561,27 @@ class PlayerRepositoryImpl @Inject constructor(
         return true
     }
 
+    override suspend fun shuffleLibraryAi(): Boolean {
+        ensureController() ?: return false
+        val pool = musicRepository.getAllDownloadedTracks()
+        if (pool.isEmpty()) return false
+
+        val seed = _playerState.value.currentTrack
+        val chained = localRecommendationEngine.sequenceVibeChain(pool, seed)
+        librarySnapshot = chained
+        libraryShuffleActive = true
+        radioActive = false
+        radioSession = null
+        _radioSeedLabel.value = null
+        setQueueInternal(
+            chained,
+            startIndex = 0,
+            startPositionMs = 0L,
+            source = com.stash.core.model.PlaybackSource.Library,
+        )
+        return true
+    }
+
     override suspend fun startRadio(
         seed: com.stash.core.data.radio.RadioSeed,
         keepCurrent: Boolean,

@@ -66,9 +66,9 @@ class LocalRecommendationEngineTest {
 
     @Test
     fun `duration proximity boosts similar length songs`() {
-        val seed = track(1L, "Focus", "Ambient", durationMs = 300000L) // 5 min
-        val candSimilarLen = track(2L, "Meditation", "Soundscape", durationMs = 310000L) // ~5 min
-        val candShort = track(3L, "Jingle", "Soundscape", durationMs = 30000L) // 30 sec
+        val seed = track(1L, "Focus Track", "Ambient Composer", durationMs = 300000L) // 5 min
+        val candSimilarLen = track(2L, "Meditation Peace", "Ambient Composer", durationMs = 310000L) // ~5 min
+        val candShort = track(3L, "Jingle Quick", "Ambient Composer", durationMs = 30000L) // 30 sec
 
         val recommendations = engine.findSimilarTracks(seed, listOf(candShort, candSimilarLen))
 
@@ -95,5 +95,40 @@ class LocalRecommendationEngineTest {
         val recommendations = engine.findSimilarTracks(seed, listOf(candUnrelated, candPharrell))
 
         assertThat(recommendations.first()).isEqualTo(candPharrell)
+    }
+
+    @Test
+    fun `romantic ballad rejects heavy rock and loud metal candidates`() {
+        val romanticSeed = track(1L, "Endless Love Ballad", "Romantic Singer", durationMs = 210000L)
+        val romanticCandidate = track(2L, "Sweet Romantic Heart", "Acoustic Melody", durationMs = 220000L)
+        val metalCandidate = track(3L, "Heavy Metal Thrash Screamo", "Iron Riff", durationMs = 215000L)
+
+        val recommendations = engine.findSimilarTracks(
+            seed = romanticSeed,
+            pool = listOf(metalCandidate, romanticCandidate),
+        )
+
+        // The romantic song must be chosen; the metal candidate is filtered/penalized out
+        assertThat(recommendations).contains(romanticCandidate)
+        assertThat(recommendations).doesNotContain(metalCandidate)
+    }
+
+    @Test
+    fun `sequenceVibeChain smoothly flows without breaking genre continuity`() {
+        val romantic1 = track(1L, "Romantic Candlelight Love", "Artist R1")
+        val romantic2 = track(2L, "Acoustic Heart Ballad", "Artist R2")
+        val rock1 = track(3L, "Heavy Rock Riff", "Artist Rock1")
+        val rock2 = track(4L, "Electric Metal Grunge", "Artist Rock2")
+
+        val pool = listOf(rock1, romantic2, rock2, romantic1)
+        val chained = engine.sequenceVibeChain(pool, seedTrack = romantic1)
+
+        // Starting with romantic1, romantic2 must precede rock tracks
+        val r2Index = chained.indexOfFirst { it.id == romantic2.id }
+        val rock1Index = chained.indexOfFirst { it.id == rock1.id }
+        val rock2Index = chained.indexOfFirst { it.id == rock2.id }
+
+        assertThat(r2Index).isLessThan(rock1Index)
+        assertThat(r2Index).isLessThan(rock2Index)
     }
 }

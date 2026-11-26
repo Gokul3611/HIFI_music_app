@@ -137,12 +137,11 @@ jobs:
           prerelease: true
           make_latest: false
           body: |
-            🧪 **Test Build: Library Redesign & AI Mood Smart Shuffle**
-            - **✨ AI Mood-Based Smart Shuffle**: Harmonic sequencing across 6 moods (Smart Flow, Chill & Relax, High Energy, Deep Focus, Night Drive, Acoustic Warmth) with anti-fatigue constraints.
-            - **📚 Modern Library UI**: Redesigned header with track count subtitle, Quick AI Smart Shuffle Bar, and mood picker.
-            - **📻 Enhanced Autoplay Engine**: Tokenizes collaborative and featuring artists (`feat.`, `ft.`, `with`, `&`, `x`) with a +30 relevance boost.
-            - **🎨 Minimalistic Glance Widget**: Sleek squircle album cover art, ambient dynamic accent buttons, and headless background dispatch.
-            - **📱 Dual ARM ABI Support**: Restored `armeabi-v7a` support alongside `arm64-v8a` within the 80MB size ceiling.
+            🧪 **Test Build: Audio Vibe Continuity & AI Smart Shuffle**
+            - **🎧 Playback Stability**: Restored ultra-low-power headless launcher widget, eliminating cover art load crashes on song start.
+            - **✨ AI Smart Shuffle Button**: Integrated clean AI Shuffle icon button directly beside classic Shuffle across Library, Liked, and Device tabs.
+            - **🎶 Genre & Vibe Continuity**: Enhanced recommendation and autoplay engine with strict stylistic clustering — romantic/acoustic tracks maintain seamless romantic flow, never jumping to rock or folk.
+            - **📱 Dual ARM ABI Support**: Full dual `arm64-v8a` and `armeabi-v7a` architecture support comfortably below 80MB.
           files: dist/Music.apk
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
