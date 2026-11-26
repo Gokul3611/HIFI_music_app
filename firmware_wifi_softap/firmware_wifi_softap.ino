@@ -93,15 +93,16 @@ static uint16_t s_active_bias = 0x0000; // Dynamic 0V to 1.65V pop-free bias tra
 static volatile bool s_worker_pause_requested = false;
 static SemaphoreHandle_t s_worker_paused = nullptr;
 static SemaphoreHandle_t s_worker_resume = nullptr;
+static TaskHandle_t s_audio_worker_task = nullptr;
 
 static void pauseAudioWorker() {
-    if (s_worker_paused == nullptr || s_worker_resume == nullptr) return;
+    if (s_audio_worker_task == nullptr || s_worker_paused == nullptr || s_worker_resume == nullptr) return;
     __atomic_store_n(&s_worker_pause_requested, true, __ATOMIC_RELEASE);
     xSemaphoreTake(s_worker_paused, portMAX_DELAY); // Wait for worker to safely park
 }
 
 static void resumeAudioWorker() {
-    if (s_worker_paused == nullptr || s_worker_resume == nullptr) return;
+    if (s_audio_worker_task == nullptr || s_worker_paused == nullptr || s_worker_resume == nullptr) return;
     __atomic_store_n(&s_worker_pause_requested, false, __ATOMIC_RELEASE);
     xSemaphoreGive(s_worker_resume); // Let worker resume streaming
 }
