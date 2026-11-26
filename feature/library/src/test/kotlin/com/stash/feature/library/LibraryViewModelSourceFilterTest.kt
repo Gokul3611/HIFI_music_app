@@ -130,10 +130,7 @@ class LibraryViewModelSourceFilterTest {
         spotifyAccounts = mock { on { spotifyAuthState } doReturn MutableStateFlow<AuthState>(AuthState.NotConnected) },
         playlistImageHelper = mock(),
         localImportCoordinator = mock { on { state } doReturn MutableStateFlow<LocalImportState>(LocalImportState.Idle) },
-        streamingPreference = mock {
-            on { enabled } doReturn flowOf(streaming)
-            onBlocking { current() } doReturn streaming
-        },
+        streamingPreference = mock { on { enabled } doReturn flowOf(streaming) },
         flacUpgradeEnqueuer = mock(),
         ytMusicApiClient = mock(),
         libraryPreferencesStore = mock {

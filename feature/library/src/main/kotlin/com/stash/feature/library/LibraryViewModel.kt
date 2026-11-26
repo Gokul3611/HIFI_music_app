@@ -932,30 +932,11 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    /** AI Mood-based smart shuffle: sequences library tracks into a coherent mood flow. */
-    fun shuffleSmart(mood: String? = null) {
-        viewModelScope.launch {
-            if (!playerRepository.shuffleLibrarySmart(mood)) {
-                _userMessages.tryEmit("Nothing downloaded to shuffle yet — download some songs first.")
-            }
-        }
-    }
-
     /** Shuffle exactly what Songs shows (Stream-only mode, where the list includes online rows). */
     fun shuffleVisible(tracks: List<Track>) {
         viewModelScope.launch {
             if (tracks.isEmpty()) return@launch
             playerRepository.setQueue(tracks.shuffled(), 0, source = com.stash.core.model.PlaybackSource.Library)
-        }
-    }
-
-    /** AI Mood-based smart shuffle for visible tracks in stream-only mode. */
-    fun shuffleVisibleSmart(tracks: List<Track>, mood: String? = null) {
-        viewModelScope.launch {
-            if (tracks.isEmpty()) return@launch
-            val listeningMood = com.stash.core.media.recommendation.ListeningMood.fromId(mood)
-            val sequenced = com.stash.core.media.recommendation.AiMoodShuffleEngine().shuffle(tracks, listeningMood)
-            playerRepository.setQueue(sequenced, 0, source = com.stash.core.model.PlaybackSource.Library)
         }
     }
 
