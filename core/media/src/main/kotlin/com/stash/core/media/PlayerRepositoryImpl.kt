@@ -128,6 +128,8 @@ class PlayerRepositoryImpl @Inject constructor(
     private val browserOutputs: com.stash.core.media.cast.BrowserOutputs? = null,
     private val localRecommendationEngine: com.stash.core.media.recommendation.LocalRecommendationEngine =
         com.stash.core.media.recommendation.LocalRecommendationEngine(),
+    private val aiMoodShuffleEngine: com.stash.core.media.recommendation.AiMoodShuffleEngine =
+        com.stash.core.media.recommendation.AiMoodShuffleEngine(),
 ) : PlayerRepository {
 
     /**
@@ -1554,6 +1556,27 @@ class PlayerRepositoryImpl @Inject constructor(
         // shuffleModeEnabled stays untouched as before.
         setQueueInternal(
             shuffled,
+            startIndex = 0,
+            startPositionMs = 0L,
+            source = com.stash.core.model.PlaybackSource.Library,
+        )
+        return true
+    }
+
+    override suspend fun shuffleLibrarySmart(mood: String?): Boolean {
+        ensureController() ?: return false
+        val pool = musicRepository.getAllDownloadedTracks()
+        if (pool.isEmpty()) return false
+
+        val listeningMood = com.stash.core.media.recommendation.ListeningMood.fromId(mood)
+        val sequenced = aiMoodShuffleEngine.shuffle(pool, listeningMood, _playerState.value.currentTrack)
+        librarySnapshot = sequenced
+        libraryShuffleActive = true
+        radioActive = false
+        radioSession = null
+        _radioSeedLabel.value = null
+        setQueueInternal(
+            sequenced,
             startIndex = 0,
             startPositionMs = 0L,
             source = com.stash.core.model.PlaybackSource.Library,

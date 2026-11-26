@@ -195,6 +195,10 @@ interface PlayerRepository {
      * nothing downloaded to shuffle (caller surfaces the why). */
     suspend fun shuffleLibrary(): Boolean
 
+    /** AI mood-based shuffle: sequences the library into an intelligent flow matching the given mood
+     * (or time-of-day contextual mood if null). */
+    suspend fun shuffleLibrarySmart(mood: String? = null): Boolean = shuffleLibrary()
+
     /**
      * Insert [track] immediately after the currently-playing track in the queue.
      * Playback continues uninterrupted; the inserted track will play next.

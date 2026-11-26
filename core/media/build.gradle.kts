@@ -32,7 +32,7 @@ android {
         release {
             ndk {
                 abiFilters.clear()
-                abiFilters += listOf("arm64-v8a")
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
             }
         }
     }

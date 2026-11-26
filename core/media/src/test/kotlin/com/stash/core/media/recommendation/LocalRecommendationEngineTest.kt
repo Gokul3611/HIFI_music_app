@@ -85,4 +85,15 @@ class LocalRecommendationEngineTest {
 
         assertThat(recommendations.first()).isEqualTo(hiResCand)
     }
+
+    @Test
+    fun `featuring and collaborating artists boost similarity`() {
+        val seed = track(1L, "Get Lucky", "Daft Punk feat. Pharrell Williams")
+        val candPharrell = track(2L, "Happy", "Pharrell Williams")
+        val candUnrelated = track(3L, "Random Song", "Totally Different")
+
+        val recommendations = engine.findSimilarTracks(seed, listOf(candUnrelated, candPharrell))
+
+        assertThat(recommendations.first()).isEqualTo(candPharrell)
+    }
 }

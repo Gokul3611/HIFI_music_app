@@ -120,6 +120,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
@@ -270,6 +271,9 @@ fun LibraryScreen(
             importState = importState,
             onShuffleLibrary = {
                 if (state.streamingMode) viewModel.shuffleVisible(state.tracks) else viewModel.shuffleLibrary()
+            },
+            onSmartShuffle = { mood ->
+                if (state.streamingMode) viewModel.shuffleVisibleSmart(state.tracks, mood) else viewModel.shuffleSmart(mood)
             },
             onShuffleLiked = viewModel::shuffleLiked,
             onShuffleDevice = deviceViewModel::shuffle,
@@ -589,6 +593,7 @@ private fun LibraryContent(
     searchQuery: String,
     importState: com.stash.data.download.files.LocalImportState,
     onShuffleLibrary: () -> Unit,
+    onSmartShuffle: (String?) -> Unit = {},
     onShuffleLiked: () -> Unit,
     onShuffleDevice: () -> Unit,
     onTabSelected: (LibraryTab) -> Unit,
@@ -702,67 +707,44 @@ private fun LibraryContent(
             onTabSelected(lastLibraryTab)
         }
 
-        // Compact header: On this device, shuffle, Import (+), search, and sort/filter icons, on the
-        // right. No "Library" title: the tab bar already says where you are.
+        // ── Modern Redesigned Library Header ────────────────────────────
         val chrome = LocalAlbumChrome.current
+        val likedTabActive = state.activeTab == LibraryTab.LIKED
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 8.dp),
+                .padding(horizontal = 20.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.End,
         ) {
-            // Shuffle stays in the always-visible header so it's reachable even
-            // once the hero has scrolled away. It shuffles what you're looking
-            // at: the liked list on the Liked tab (issue #402 — it used to
-            // shuffle the whole library there), the whole library elsewhere.
-            val likedTabActive = state.activeTab == LibraryTab.LIKED
-            IconButton(
-                onClick = { onTabSelected(if (deviceTabActive) lastLibraryTab else LibraryTab.DEVICE) },
-                modifier = Modifier.semantics { this.selected = deviceTabActive },
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(
-                            color = if (deviceTabActive) {
-                                chrome.accent.copy(alpha = 0.18f)
-                            } else {
-                                Color.Transparent
-                            },
-                            shape = CircleShape,
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        Icons.Filled.Save,
-                        contentDescription = "On this device",
-                        tint = if (deviceTabActive) {
-                            chrome.accent
-                        } else {
-                            LocalContentColor.current
-                        },
-                    )
-                }
-            }
-            IconButton(
-                onClick = when {
-                    likedTabActive -> onShuffleLiked
-                    deviceTabActive -> onShuffleDevice
-                    else -> onShuffleLibrary
-                },
-            ) {
-                Icon(
-                    Icons.Filled.Shuffle,
-                    contentDescription = when {
-                        likedTabActive -> "Shuffle liked songs"
-                        deviceTabActive -> "Shuffle songs on this device"
-                        else -> "Shuffle library"
-                    },
-                    tint = chrome.accent,
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Library",
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.5).sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Text(
+                    text = "${state.librarySongCount} songs • Hi-Fi Audio",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            // "+": a Spotify / YouTube link, a playlist file another app exported, or audio files from the phone.
+
+            // Quick actions on the header
+            IconButton(onClick = {
+                if (searchOpen) onSearchQueryChanged("")
+                searchOpen = !searchOpen
+            }) {
+                Icon(
+                    Icons.Filled.Search,
+                    contentDescription = "Search library",
+                    tint = if (searchOpen) chrome.accent else LocalContentColor.current,
+                )
+            }
+
+            // "+": a Spotify / YouTube link, a playlist file, or audio files
             Box {
                 var addMenu by remember { mutableStateOf(false) }
                 var pasteLink by remember { mutableStateOf(false) }
@@ -793,16 +775,138 @@ private fun LibraryContent(
                     )
                 }
             }
-            // Closing the search clears it: it used to only hide the field, leaving every tab
-            // silently filtered by a query the user could no longer see.
-            IconButton(onClick = {
-                if (searchOpen) onSearchQueryChanged("")
-                searchOpen = !searchOpen
-            }) {
-                Icon(Icons.Filled.Search, contentDescription = "Search library")
+
+            // "On this device" disk icon
+            IconButton(
+                onClick = { onTabSelected(if (deviceTabActive) lastLibraryTab else LibraryTab.DEVICE) },
+                modifier = Modifier.semantics { this.selected = deviceTabActive },
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(
+                            color = if (deviceTabActive) chrome.accent.copy(alpha = 0.18f) else Color.Transparent,
+                            shape = CircleShape,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Filled.Save,
+                        contentDescription = "On this device",
+                        tint = if (deviceTabActive) chrome.accent else LocalContentColor.current,
+                    )
+                }
             }
+
             IconButton(onClick = { sortFilterOpen = true }) {
                 Icon(Icons.Filled.Tune, contentDescription = "Sort and filter")
+            }
+        }
+
+        // ── AI Mood Smart Shuffle Bar ────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            var moodMenuOpen by remember { mutableStateOf(false) }
+
+            // Primary AI Smart Shuffle pill button
+            Surface(
+                onClick = { onSmartShuffle(null) },
+                shape = RoundedCornerShape(22.dp),
+                color = chrome.accent.copy(alpha = 0.14f),
+                border = BorderStroke(1.dp, chrome.accent.copy(alpha = 0.35f)),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
+                ) {
+                    Text("✨", fontSize = 16.sp)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "AI Smart Shuffle",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = chrome.accent,
+                    )
+                }
+            }
+
+            // Mood selector dropdown
+            Box {
+                Surface(
+                    onClick = { moodMenuOpen = true },
+                    shape = RoundedCornerShape(22.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.size(44.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Icon(
+                            Icons.Filled.Tune,
+                            contentDescription = "Select Mood",
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                DropdownMenu(expanded = moodMenuOpen, onDismissRequest = { moodMenuOpen = false }) {
+                    com.stash.core.media.recommendation.ListeningMood.values().forEach { mood ->
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(mood.emoji, fontSize = 18.sp)
+                                    Spacer(Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            mood.title,
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                        )
+                                        Text(
+                                            mood.subtitle,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            },
+                            onClick = {
+                                moodMenuOpen = false
+                                onSmartShuffle(mood.id)
+                            },
+                        )
+                    }
+                }
+            }
+
+            // Classic random shuffle button
+            Surface(
+                onClick = when {
+                    likedTabActive -> onShuffleLiked
+                    deviceTabActive -> onShuffleDevice
+                    else -> onShuffleLibrary
+                },
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(44.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        Icons.Filled.Shuffle,
+                        contentDescription = when {
+                            likedTabActive -> "Shuffle liked songs"
+                            deviceTabActive -> "Shuffle songs on this device"
+                            else -> "Shuffle library"
+                        },
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
 

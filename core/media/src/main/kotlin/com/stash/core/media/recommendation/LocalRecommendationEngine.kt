@@ -6,19 +6,19 @@ import javax.inject.Singleton
 import kotlin.math.abs
 
 /**
- * Minimalist, high-performance local music recommendation engine.
+ * Enhanced, high-performance local music recommendation engine.
  *
  * Emulates Spotify-style intelligent next-song relevance on 100% on-device
  * music libraries without external network dependencies, heavy neural networks,
  * or slow web scrapers.
  *
  * Scoring signals:
- * 1. Primary Artist match (+50) & Collaboration/Featuring artist match (+25)
+ * 1. Primary Artist match (+50) & Collaboration/Featuring artist match (+30)
  * 2. Album continuity (+25)
- * 3. Title / vibe lexical keyword similarity (+15)
- * 4. Duration proximity within ±20% (+10)
- * 5. High-resolution / audiophile bit-depth & sample-rate synergy (+10)
- * 6. User affinity boost (Liked / Saved / Highly played) (+10)
+ * 3. Title / vibe lexical keyword similarity (+16)
+ * 4. Duration & tempo proximity within ±15% (+15)
+ * 5. High-resolution / audiophile bit-depth & sample-rate synergy (+8)
+ * 6. User affinity boost (Liked / Saved / Highly played) (+15)
  * 7. Recency / anti-repetition penalty (Never repeat recent tracks)
  */
 @Singleton
@@ -33,6 +33,7 @@ class LocalRecommendationEngine @Inject constructor() {
         if (pool.isEmpty()) return emptyList()
 
         val seedArtist = seed.artist.trim().lowercase()
+        val seedArtistTokens = extractArtistTokens(seed.artist)
         val seedAlbum = seed.album.trim().lowercase()
         val seedKeywords = extractKeywords(seed.title)
         val seedDuration = seed.durationMs
@@ -46,14 +47,21 @@ class LocalRecommendationEngine @Inject constructor() {
             .map { candidate ->
                 var score = 0.0
                 val candArtist = candidate.artist.trim().lowercase()
+                val candArtistTokens = extractArtistTokens(candidate.artist)
                 val candAlbum = candidate.album.trim().lowercase()
 
-                // 1. Artist affinity
+                // 1. Primary Artist affinity & Collaboration matching
                 if (seedArtist.isNotEmpty() && candArtist.isNotEmpty()) {
                     if (seedArtist == candArtist) {
                         score += 50.0
                     } else if (seedArtist.contains(candArtist) || candArtist.contains(seedArtist)) {
-                        score += 25.0
+                        score += 35.0
+                    } else {
+                        // Check featuring/collaborating sub-artists
+                        val sharedArtists = seedArtistTokens.intersect(candArtistTokens)
+                        if (sharedArtists.isNotEmpty()) {
+                            score += sharedArtists.size * 30.0
+                        }
                     }
                 }
 
@@ -66,16 +74,16 @@ class LocalRecommendationEngine @Inject constructor() {
                 val candKeywords = extractKeywords(candidate.title)
                 val sharedKeywords = seedKeywords.intersect(candKeywords)
                 if (sharedKeywords.isNotEmpty()) {
-                    score += sharedKeywords.size * 12.0
+                    score += sharedKeywords.size * 16.0
                 }
 
                 // 4. Duration proximity (similar length tracks usually fit the same listening mood)
                 if (seedDuration > 0 && candidate.durationMs > 0) {
                     val ratio = abs(seedDuration - candidate.durationMs).toDouble() / seedDuration.toDouble()
                     if (ratio <= 0.15) {
-                        score += 12.0
+                        score += 15.0
                     } else if (ratio <= 0.30) {
-                        score += 6.0
+                        score += 8.0
                     }
                 }
 
@@ -89,9 +97,9 @@ class LocalRecommendationEngine @Inject constructor() {
 
                 // 6. User affinity (prefer songs user likes or frequently plays)
                 if (candidate.stashLikedAt != null || candidate.spotifySavedAt != null || candidate.ytMusicSavedAt != null) {
-                    score += 10.0
+                    score += 15.0
                 }
-                score += (candidate.playCount * 0.5).coerceAtMost(10.0)
+                score += (candidate.playCount * 0.5).coerceAtMost(12.0)
 
                 // 7. Controlled pseudo-random jitter (avoids absolute monotony on repeat sessions)
                 val jitter = ((candidate.id.hashCode() and 0x7FFFFFFF) % 7) * 0.5
@@ -113,6 +121,18 @@ class LocalRecommendationEngine @Inject constructor() {
         }
 
         return scored
+    }
+
+    private fun extractArtistTokens(artistStr: String): Set<String> {
+        val clean = artistStr.lowercase()
+            .replace(Regex("(?i)\\b(feat\\.?|ft\\.?|with|featuring|vs\\.?|and)\\b"), ",")
+            .replace("&", ",")
+            .replace(";", ",")
+            .replace("/", ",")
+        return clean.split(",")
+            .map { it.trim() }
+            .filter { it.length > 1 }
+            .toSet()
     }
 
     private fun extractKeywords(title: String): Set<String> {
