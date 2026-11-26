@@ -1,7 +1,9 @@
 package com.stash.app.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.os.Build
 import android.widget.RemoteViews
 import androidx.annotation.LayoutRes
@@ -36,6 +38,7 @@ import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
+import androidx.glance.layout.ContentScale
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
@@ -100,6 +103,17 @@ class NowPlayingWidget : GlanceAppWidget() {
             }
         }
     }
+
+    override fun onCompositionError(
+        context: Context,
+        glanceId: GlanceId,
+        appWidgetId: Int,
+        throwable: Throwable,
+    ) {
+        // Zero-bitmap fallback per Android Glance guidelines so widget render issues never crash the app.
+        val fallback = RemoteViews(context.packageName, R.layout.widget_preview_wide)
+        AppWidgetManager.getInstance(context).updateAppWidget(appWidgetId, fallback)
+    }
 }
 
 /** The app's own Material 3 schemes; Glance switches between them with the system's dark mode. */
@@ -125,9 +139,9 @@ private fun NowPlayingContent(model: WidgetModel, serviceRunning: Boolean) {
     val artist = state?.artist ?: context.getString(R.string.widget_open_stash)
 
     if (isSquare(size)) {
-        SquareCard(title, artist, buttons, model.accents)
+        SquareCard(title, artist, model.cover, buttons, model.accents)
     } else {
-        WideCard(title, artist, buttons, model.accents)
+        WideCard(title, artist, model.cover, buttons, model.accents)
     }
 }
 
@@ -137,26 +151,29 @@ private fun cardModifier(): GlanceModifier =
     GlanceModifier
         .fillMaxSize()
         .appWidgetBackground()
-        .background(ImageProvider(R.drawable.widget_card), colorFilter = ColorFilter.tint(GlanceTheme.colors.surface))
+        .background(ColorProvider(day = StashLightColorScheme.surface, night = StashDarkColorScheme.surface))
         .cornerRadius(CardRadius)
 
 @Composable
 private fun WideCard(
     title: String,
     artist: String,
+    cover: Bitmap?,
     buttons: WidgetButtons?,
     accents: WidgetAccents,
 ) {
     Row(
-        modifier = cardModifier().padding(horizontal = 16.dp, vertical = 10.dp),
+        modifier = cardModifier().padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        CoverThumbnail(cover = cover, size = 48.dp, cornerRadius = 14.dp)
+        Spacer(GlanceModifier.width(12.dp))
         Column(
             modifier = GlanceModifier.defaultWeight().wrapContentHeight(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             HiFiBadge()
-            Spacer(GlanceModifier.height(2.dp))
+            Spacer(GlanceModifier.height(1.dp))
             WidgetText(
                 text = title,
                 layout = R.layout.widget_text_title,
@@ -164,7 +181,7 @@ private fun WideCard(
                 dark = StashDarkColorScheme.onSurface,
             )
             if (artist.isNotEmpty()) {
-                Spacer(GlanceModifier.height(2.dp))
+                Spacer(GlanceModifier.height(1.dp))
                 WidgetText(
                     text = artist,
                     layout = R.layout.widget_text_artist,
@@ -174,13 +191,13 @@ private fun WideCard(
             }
         }
         if (buttons != null) {
-            Spacer(GlanceModifier.width(12.dp))
+            Spacer(GlanceModifier.width(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                PreviousButton(buttons.previous, diameter = 36.dp, tint = GlanceTheme.colors.onSurface)
-                Spacer(GlanceModifier.width(6.dp))
-                PlayPauseButton(buttons, accents, diameter = 44.dp)
-                Spacer(GlanceModifier.width(6.dp))
-                NextButton(buttons.next, diameter = 36.dp, tint = GlanceTheme.colors.onSurface)
+                PreviousButton(buttons.previous, diameter = 34.dp, tint = GlanceTheme.colors.onSurface)
+                Spacer(GlanceModifier.width(4.dp))
+                PlayPauseButton(buttons, accents, diameter = 42.dp)
+                Spacer(GlanceModifier.width(4.dp))
+                NextButton(buttons.next, diameter = 34.dp, tint = GlanceTheme.colors.onSurface)
             }
         }
     }
@@ -190,21 +207,30 @@ private fun WideCard(
 private fun SquareCard(
     title: String,
     artist: String,
+    cover: Bitmap?,
     buttons: WidgetButtons?,
     accents: WidgetAccents,
 ) {
     Column(
-        modifier = cardModifier().padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier = cardModifier().padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        HiFiBadge()
-        Spacer(GlanceModifier.height(6.dp))
+        Row(
+            modifier = GlanceModifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            CoverThumbnail(cover = cover, size = 56.dp, cornerRadius = 16.dp)
+        }
+        Spacer(GlanceModifier.height(8.dp))
         Column(
             modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            HiFiBadge()
+            Spacer(GlanceModifier.height(2.dp))
             WidgetText(
                 text = title,
                 layout = R.layout.widget_text_title_square,
@@ -212,7 +238,7 @@ private fun SquareCard(
                 dark = StashDarkColorScheme.onSurface,
             )
             if (artist.isNotEmpty()) {
-                Spacer(GlanceModifier.height(3.dp))
+                Spacer(GlanceModifier.height(2.dp))
                 WidgetText(
                     text = artist,
                     layout = R.layout.widget_text_artist_square,
@@ -222,17 +248,54 @@ private fun SquareCard(
             }
         }
         if (buttons != null) {
-            Spacer(GlanceModifier.height(8.dp))
+            Spacer(GlanceModifier.height(6.dp))
             Row(
                 modifier = GlanceModifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                PreviousButton(buttons.previous, diameter = 38.dp, tint = GlanceTheme.colors.onSurface)
-                Spacer(GlanceModifier.width(14.dp))
-                PlayPauseButton(buttons, accents, diameter = 48.dp)
-                Spacer(GlanceModifier.width(14.dp))
-                NextButton(buttons.next, diameter = 38.dp, tint = GlanceTheme.colors.onSurface)
+                PreviousButton(buttons.previous, diameter = 34.dp, tint = GlanceTheme.colors.onSurface)
+                Spacer(GlanceModifier.width(12.dp))
+                PlayPauseButton(buttons, accents, diameter = 44.dp)
+                Spacer(GlanceModifier.width(12.dp))
+                NextButton(buttons.next, diameter = 34.dp, tint = GlanceTheme.colors.onSurface)
+            }
+        }
+    }
+}
+
+/** Minimalist squircle album cover with RGB_565 bitmap or solid Material 3 fallback. */
+@Composable
+private fun CoverThumbnail(cover: Bitmap?, size: Dp, cornerRadius: Dp) {
+    Box(
+        modifier = GlanceModifier
+            .size(size)
+            .cornerRadius(cornerRadius),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (cover != null && !cover.isRecycled) {
+            Image(
+                provider = ImageProvider(cover),
+                contentDescription = "Cover",
+                modifier = GlanceModifier
+                    .fillMaxSize()
+                    .cornerRadius(cornerRadius),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Box(
+                modifier = GlanceModifier
+                    .fillMaxSize()
+                    .background(ColorProvider(day = StashLightColorScheme.surfaceVariant, night = StashDarkColorScheme.surfaceVariant))
+                    .cornerRadius(cornerRadius),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    provider = ImageProvider(R.drawable.widget_cover_placeholder),
+                    contentDescription = null,
+                    modifier = GlanceModifier.size(size * 0.45f),
+                    colorFilter = ColorFilter.tint(ColorProvider(day = StashLightColorScheme.onSurfaceVariant, night = StashDarkColorScheme.onSurfaceVariant)),
+                )
             }
         }
     }
@@ -279,10 +342,7 @@ private fun PlayPauseButton(buttons: WidgetButtons, accents: WidgetAccents, diam
     Box(
         modifier = GlanceModifier
             .size(diameter)
-            .background(
-                ImageProvider(R.drawable.widget_circle),
-                colorFilter = ColorFilter.tint(ColorProvider(day = Color(accents.accentLight), night = Color(accents.accentDark))),
-            )
+            .background(ColorProvider(day = Color(accents.accentLight), night = Color(accents.accentDark)))
             .cornerRadius(diameter / 2)
             .clickable(mediaAction(context, buttons.playPause))
             .semantics { contentDescription = label },

@@ -668,7 +668,9 @@ class LibraryViewModel @Inject constructor(
             val all = likedTracks.value
             if (all.isEmpty()) return@launch
             val seed = playerRepository.playerState.value.currentTrack
-            val chained = localRecommendationEngine.sequenceVibeChain(all, seed)
+            val chained = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                runCatching { localRecommendationEngine.sequenceVibeChain(all, seed) }.getOrElse { all.shuffled() }
+            }
             playerRepository.setQueue(
                 chained,
                 0,
@@ -971,7 +973,9 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch {
             if (tracks.isEmpty()) return@launch
             val seed = playerRepository.playerState.value.currentTrack
-            val chained = localRecommendationEngine.sequenceVibeChain(tracks, seed)
+            val chained = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                runCatching { localRecommendationEngine.sequenceVibeChain(tracks, seed) }.getOrElse { tracks.shuffled() }
+            }
             playerRepository.setQueue(chained, 0, source = com.stash.core.model.PlaybackSource.Library)
         }
     }

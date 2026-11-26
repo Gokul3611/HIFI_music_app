@@ -203,9 +203,15 @@ class AllSongsViewModel @Inject constructor(
     fun shuffleAi() {
         val all = songs.value
         if (all.isEmpty()) return
-        val current = player.playerState.value.currentTrack
-        val chained = com.stash.core.media.recommendation.LocalRecommendationEngine().sequenceVibeChain(all, current)
-        viewModelScope.launch { player.setQueue(chained, 0, PlaybackSource.AllSongs) }
+        viewModelScope.launch {
+            val current = player.playerState.value.currentTrack
+            val chained = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                runCatching {
+                    com.stash.core.media.recommendation.LocalRecommendationEngine().sequenceVibeChain(all, current)
+                }.getOrElse { all.shuffled() }
+            }
+            player.setQueue(chained, 0, PlaybackSource.AllSongs)
+        }
     }
 
     /** Each lands right after the playing song; going backwards keeps the selection's order. */

@@ -1563,11 +1563,13 @@ class PlayerRepositoryImpl @Inject constructor(
 
     override suspend fun shuffleLibraryAi(): Boolean {
         ensureController() ?: return false
-        val pool = musicRepository.getAllDownloadedTracks()
+        val pool = withContext(Dispatchers.IO) { musicRepository.getAllDownloadedTracks() }
         if (pool.isEmpty()) return false
 
         val seed = _playerState.value.currentTrack
-        val chained = localRecommendationEngine.sequenceVibeChain(pool, seed)
+        val chained = withContext(Dispatchers.Default) {
+            runCatching { localRecommendationEngine.sequenceVibeChain(pool, seed) }.getOrElse { pool.shuffled() }
+        }
         librarySnapshot = chained
         libraryShuffleActive = true
         radioActive = false
