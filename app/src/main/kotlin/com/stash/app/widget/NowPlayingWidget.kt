@@ -35,6 +35,7 @@ import androidx.glance.background
 import androidx.glance.color.ColorProvider
 import android.graphics.Bitmap
 import androidx.glance.layout.ContentScale
+import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
