@@ -9,6 +9,7 @@ on:
       - feature/custom-app-icons
       - feature/widget-ultra-low-power-playback
       - feature/esp32-playback-fixes
+      - feature/glance-canonical-widget-redesign
   pull_request:
     branches:
       - master

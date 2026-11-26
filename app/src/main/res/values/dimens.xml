@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget Dimensions (Glance Canonical Layouts standard specs) -->
+    <dimen name="widget_margin">0dp</dimen>
+
+    <!-- Wide toolbar / playback widget: 4x1 default, resizable -->
+    <integer name="widget_now_playing_target_cell_width">4</integer>
+    <integer name="widget_now_playing_target_cell_height">1</integer>
+    <dimen name="widget_now_playing_min_width">256dp</dimen>
+    <dimen name="widget_now_playing_min_height">48dp</dimen>
+    <dimen name="widget_now_playing_min_resize_width">180dp</dimen>
+    <dimen name="widget_now_playing_min_resize_height">48dp</dimen>
+    <dimen name="widget_now_playing_max_resize_width">624dp</dimen>
+    <dimen name="widget_now_playing_max_resize_height">200dp</dimen>
+
+    <!-- Square console / card widget: 2x2 default, resizable -->
+    <integer name="widget_now_playing_square_target_cell_width">2</integer>
+    <integer name="widget_now_playing_square_target_cell_height">2</integer>
+    <dimen name="widget_now_playing_square_min_width">110dp</dimen>
+    <dimen name="widget_now_playing_square_min_height">110dp</dimen>
+    <dimen name="widget_now_playing_square_min_resize_width">110dp</dimen>
+    <dimen name="widget_now_playing_square_min_resize_height">110dp</dimen>
+    <dimen name="widget_now_playing_square_max_resize_width">300dp</dimen>
+    <dimen name="widget_now_playing_square_max_resize_height">300dp</dimen>
+</resources>
