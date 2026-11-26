@@ -177,7 +177,7 @@ class StashAudioOutput(
         val softVolume = bitPerfect && (playerVolume != 1f || volume.isActive)
         val before = buffer.position()
 
-        // ESP32 Wi-Fi Direct: Stream uncompressed 32-bit PCM to ESP32 socket
+        // ESP32 Wi-Fi Direct: Stream uncompressed 32-bit PCM to ESP32 socket, paced 1:1 by inner AudioTrack
         if (controller.mode == com.stash.core.data.prefs.HiResOutputMode.ESP32_WIFI_DIRECT) {
             if (!Esp32SocketStreamer.hasCapacity()) {
                 return false
@@ -254,6 +254,9 @@ class StashAudioOutput(
         framesWritten = 0
         tail = null
         stopping = false
+        if (controller.mode == com.stash.core.data.prefs.HiResOutputMode.ESP32_WIFI_DIRECT) {
+            Esp32SocketStreamer.clearPendingAudio()
+        }
         writer.flush()
         dsp.reset()
         volume.snapTo(playerVolume)

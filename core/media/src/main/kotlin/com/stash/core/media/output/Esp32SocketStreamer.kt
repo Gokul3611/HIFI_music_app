@@ -191,20 +191,28 @@ object Esp32SocketStreamer {
                     if (chunk.sampleRateHz != configuredSampleRate) {
                         if (rejectedSampleRate == chunk.sampleRateHz) continue
                         rejectedSampleRate = null
-                        val rateReply = requestUdpCommand(
-                            espHost,
-                            Esp32WireProtocol.sampleRateCommand(chunk.sampleRateHz),
-                            SAMPLE_RATE_ACK_TIMEOUT_MS,
-                        )
-                        if (!Esp32WireProtocol.isSampleRateAcknowledgement(rateReply, chunk.sampleRateHz)) {
+                        val rateReply = runCatching {
+                            requestUdpCommandWithRetry(
+                                espHost,
+                                Esp32WireProtocol.sampleRateCommand(chunk.sampleRateHz),
+                                SAMPLE_RATE_ACK_TIMEOUT_MS,
+                                attempts = 2,
+                            )
+                        }.getOrNull()
+                        if (rateReply == null) {
+                            Log.w(TAG, "UDP RATE:${chunk.sampleRateHz} ACK timed out; continuing stream")
+                            configuredSampleRate = chunk.sampleRateHz
+                            _status.value = _status.value.copy(sampleRateHz = configuredSampleRate)
+                        } else if (!Esp32WireProtocol.isSampleRateAcknowledgement(rateReply, chunk.sampleRateHz)) {
                             rejectedSampleRate = chunk.sampleRateHz
                             _status.value = _status.value.copy(
                                 statusMessage = "ESP32 rejected ${chunk.sampleRateHz} Hz audio: $rateReply",
                             )
                             continue
+                        } else {
+                            configuredSampleRate = chunk.sampleRateHz
+                            _status.value = _status.value.copy(sampleRateHz = configuredSampleRate)
                         }
-                        configuredSampleRate = chunk.sampleRateHz
-                        _status.value = _status.value.copy(sampleRateHz = configuredSampleRate)
                     }
 
                     os.write(chunk.bytes)
@@ -223,6 +231,23 @@ object Esp32SocketStreamer {
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private fun requestUdpCommandWithRetry(
+        host: String,
+        command: String,
+        timeoutMs: Int,
+        attempts: Int = 2,
+    ): String {
+        var lastError: Exception? = null
+        repeat(attempts.coerceAtLeast(1)) {
+            try {
+                return requestUdpCommand(host, command, timeoutMs)
+            } catch (e: Exception) {
+                lastError = e
+            }
+        }
+        throw lastError ?: IOException("UDP command failed: $command")
+    }
 
     private fun requestUdpCommand(host: String, command: String, timeoutMs: Int): String {
         val address = InetAddress.getByName(host)
@@ -538,6 +563,10 @@ object Esp32SocketStreamer {
         if (outBytes.size < required) {
             outBytes = ByteArray(required)
         }
+    }
+
+    fun clearPendingAudio() {
+        sendQueue.clear()
     }
 
     fun close() = closeConnection()
