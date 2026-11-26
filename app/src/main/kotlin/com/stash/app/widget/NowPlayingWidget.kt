@@ -357,11 +357,11 @@ private fun CanonicalHeroPlayButton(
 ) {
     val context = LocalContext.current
     val label = context.getString(if (buttons.showsPause) R.string.widget_pause else R.string.widget_play)
-    val buttonBgProvider = ColorProvider(
+    val buttonBgProvider = androidx.glance.color.ColorProvider(
         day = Color(accents.accentLight),
         night = Color(accents.accentDark),
     )
-    val buttonOnBgProvider = ColorProvider(
+    val buttonOnBgProvider = androidx.glance.color.ColorProvider(
         day = Color(accents.onAccentLight),
         night = Color(accents.onAccentDark),
     )
