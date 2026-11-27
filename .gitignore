@@ -96,3 +96,5 @@ spike/**/__pycache__/
 # live under androidTest so the on-device spike can read them. Never commit.
 app/src/androidTest/assets/clapspike/
 .kotlin/
+.vscode/
+GEMINI.md

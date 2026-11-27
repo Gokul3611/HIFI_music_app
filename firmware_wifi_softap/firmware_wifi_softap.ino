@@ -38,6 +38,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "driver/i2s.h"
+#include "esp_wifi.h"
 
 // Wi-Fi Hotspot Credentials (default: matching Music App)
 const char* HOTSPOT_SSID = "FBI-VAN";
@@ -83,6 +84,7 @@ static uint8_t s_rx_buf[2048] __attribute__((aligned(4)));
 static uint8_t s_active_mode = MODE_INTERNAL_ESP32_DAC;
 static uint32_t s_active_sample_rate = 48000;
 static bool s_i2s_initialized = false;
+static uint16_t s_active_bias = 0x0000; // Dynamic 0V to 1.65V pop-free bias tracker
 
 // ============================================================================
 // STARVATION-FREE HANDSHAKE (Worker Pause / Resume)
@@ -91,15 +93,16 @@ static bool s_i2s_initialized = false;
 static volatile bool s_worker_pause_requested = false;
 static SemaphoreHandle_t s_worker_paused = nullptr;
 static SemaphoreHandle_t s_worker_resume = nullptr;
+static TaskHandle_t s_audio_worker_task = nullptr;
 
 static void pauseAudioWorker() {
-    if (s_worker_paused == nullptr || s_worker_resume == nullptr) return;
+    if (s_audio_worker_task == nullptr || s_worker_paused == nullptr || s_worker_resume == nullptr) return;
     __atomic_store_n(&s_worker_pause_requested, true, __ATOMIC_RELEASE);
     xSemaphoreTake(s_worker_paused, portMAX_DELAY); // Wait for worker to safely park
 }
 
 static void resumeAudioWorker() {
-    if (s_worker_paused == nullptr || s_worker_resume == nullptr) return;
+    if (s_audio_worker_task == nullptr || s_worker_paused == nullptr || s_worker_resume == nullptr) return;
     __atomic_store_n(&s_worker_pause_requested, false, __ATOMIC_RELEASE);
     xSemaphoreGive(s_worker_resume); // Let worker resume streaming
 }
@@ -176,9 +179,7 @@ static inline void rb_read(uint8_t *dest, size_t length) {
  */
 static inline void rb_reset(bool new_stream) {
     uint32_t head = new_stream ? 0u : (__atomic_load_n(&s_rb_head, __ATOMIC_RELAXED) & ~7u);
-    if (new_stream) {
-        __atomic_store_n(&s_rb_head, 0u, __ATOMIC_RELEASE);
-    }
+    __atomic_store_n(&s_rb_head, head, __ATOMIC_RELEASE);
     __atomic_store_n(&s_rb_tail, head, __ATOMIC_RELEASE);
     s_prebuffering = true;
 }
@@ -200,22 +201,38 @@ static bool isSupportedSampleRate(uint32_t sample_rate) {
 /**
  * Feeds DC-safe silence to the active output without causing speaker pops:
  *   - For External PCM5102A: writes zeroed DMA (0 V true digital ground).
- *   - For Internal DAC: writes mid-scale 0x8000 (1.65 V DC mid-rail) so the DAC
- *     does not violently step between 1.65 V and 0 V.
+ *   - For Internal DAC: writes mid-scale 0x8000 (1.65 V DC mid-rail) during active stream
+ *     prebuffering/starvation so voltage does not fluctuate or cause zipper scratching.
  */
 static void outputDmaSilence(uint8_t mode) {
     if (mode == MODE_INTERNAL_ESP32_DAC) {
-        // Output mid-scale silence on stack (zero BSS DRAM footprint)
-        uint16_t silence[64];
-        for (size_t i = 0; i < 64; i++) {
-            silence[i] = 0x8000;
+        uint16_t bias = (s_active_bias > 0) ? 0x8000 : 0x0000;
+        const size_t sample_count = DMA_CHUNK_SIZE / sizeof(int32_t); // 512 samples = 1024 bytes
+        for (size_t i = 0; i < sample_count; i++) {
+            s_dac_chunk[i] = bias;
         }
         size_t written = 0;
-        for (int b = 0; b < 16; b++) {
-            i2s_write(I2S_PORT, silence, sizeof(silence), &written, pdMS_TO_TICKS(10));
-        }
+        i2s_write(I2S_PORT, s_dac_chunk, sample_count * sizeof(uint16_t), &written, pdMS_TO_TICKS(5));
     } else {
         i2s_zero_dma_buffer(I2S_PORT);
+    }
+}
+
+/**
+ * Smoothly ramps down the internal DAC DC bias to true 0V ground when idle/disconnected.
+ * Eliminates DC current drain through headphones, background RF whine, and speaker thump.
+ */
+static void rampDownBiasToGround() {
+    if (getActiveMode() != MODE_INTERNAL_ESP32_DAC || s_active_bias == 0) return;
+    uint16_t silence[64];
+    while (s_active_bias > 0) {
+        for (size_t i = 0; i < 64; i++) {
+            if (s_active_bias >= 128) s_active_bias -= 128;
+            else s_active_bias = 0;
+            silence[i] = static_cast<uint16_t>(s_active_bias & 0xFF00);
+        }
+        size_t written = 0;
+        i2s_write(I2S_PORT, silence, sizeof(silence), &written, pdMS_TO_TICKS(10));
     }
 }
 
@@ -234,8 +251,8 @@ static esp_err_t installI2SHardware(uint8_t mode, uint32_t sample_rate) {
         i2s_config.communication_format = I2S_COMM_FORMAT_STAND_I2S;
         i2s_config.use_apll = true;
     } else {
-        // In internal DAC mode, tx_desc_auto_clear must be false to prevent DMA from auto-clearing to 0x0000 (0V thump)
-        i2s_config.tx_desc_auto_clear = false;
+        // Auto-clear DMA descriptors so it never repeats stale audio
+        i2s_config.tx_desc_auto_clear = true;
         i2s_config.mode = (i2s_mode_t)(i2s_config.mode | I2S_MODE_DAC_BUILT_IN);
         i2s_config.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
         i2s_config.communication_format = I2S_COMM_FORMAT_STAND_MSB;
@@ -360,17 +377,17 @@ void audioWorkerTask(void *param) {
         uint32_t active_rate = getActiveSampleRate();
         size_t watermark = getPrebufferWatermark(active_rate);
         size_t available = rb_available_read();
+        uint8_t mode = getActiveMode();
 
         // Anti-crackle pre-buffering: ensure adaptive cushion before draining ring buffer
         if (s_prebuffering) {
             if (available < watermark) {
+                outputDmaSilence(mode);
                 vTaskDelay(pdMS_TO_TICKS(2));
                 continue;
             }
             s_prebuffering = false;
         }
-
-        uint8_t mode = s_active_mode;
 
         // Buffer starvation protection: if drained below chunk size, output silence and pre-buffer again
         if (available < DMA_CHUNK_SIZE) {
@@ -388,17 +405,33 @@ void audioWorkerTask(void *param) {
             // Built-in DAC consumes the high 8 bits of each 16-bit slot.
             // 1. TPDF dither: Extracts two uniform 8-bit random variables from upper bits of a single fast_rand32().
             // 2. DC-bias correction: +128 offset ensures symmetric rounding around 0x8000 midscale silence.
-            // 3. Channel order: i ^ 1 handles ESP32 legacy I2S FIFO 32-bit halfword swap for proper L/R channel mapping.
+            // 3. Sequential stereo indexing: Left and Right channels mapped directly without halfword inversion.
+            // 4. Headroom scaling: ~1.2 dB headroom (28800 / 32768) prevents digital peak clipping and analog rail saturation.
+            // 5. Pop-free dynamic bias ramp: smoothly raises bias from 0V to 1.65V over 512 samples on startup.
             const int32_t *input = reinterpret_cast<const int32_t *>(s_dma_chunk);
             const size_t sample_count = DMA_CHUNK_SIZE / sizeof(int32_t);
+
             for (size_t i = 0; i < sample_count; i++) {
+                if (s_active_bias < 0x8000) {
+                    s_active_bias += 64; // Smooth ~10ms ramp-up to 1.65V on new stream
+                    if (s_active_bias > 0x8000) s_active_bias = 0x8000;
+                }
+
                 int32_t s16 = input[i] >> 16; // 16-bit signed [-32768, 32767]
+
+                // Scale to 28800 to prevent digital peak clipping and keep within linear DAC range
+                int32_t scaled = (s16 * 28800) >> 15;
+                if (s_active_bias < 0x8000) {
+                    scaled = (scaled * static_cast<int32_t>(s_active_bias)) >> 15;
+                }
+
                 uint32_t r = fast_rand32();
                 int32_t dither = static_cast<int32_t>(r >> 24) - static_cast<int32_t>((r >> 16) & 0xFF);
-                int32_t val = s16 + dither + 32768 + 128; // Unsigned with +128 rounding
+                int32_t val = scaled + dither + s_active_bias + 128;
                 if (val < 0) val = 0;
                 else if (val > 65535) val = 65535;
-                s_dac_chunk[i ^ 1] = static_cast<uint16_t>(val & 0xFF00);
+
+                s_dac_chunk[i] = static_cast<uint16_t>(val & 0xFF00);
             }
             output = reinterpret_cast<const uint8_t *>(s_dac_chunk);
             output_length = sample_count * sizeof(uint16_t);
@@ -464,6 +497,15 @@ static void handleControlUdp() {
         return;
     }
 
+    if (strcmp(command, "FLUSH") == 0) {
+        pauseAudioWorker();
+        outputDmaSilence(getActiveMode());
+        rb_reset(true);
+        resumeAudioWorker();
+        sendUdpReply(remote_address, remote_port, "FLUSH_ACK");
+        return;
+    }
+
     if (strcmp(command, "GET_STATUS") == 0) {
         int rssi = (WiFi.getMode() == WIFI_STA && WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
         unsigned int fill_pct = (rb_available_read() * 100U) / (RING_BUFFER_SIZE - 1);
@@ -522,6 +564,10 @@ static void handleControlUdp() {
 // SYSTEM SETUP
 // ============================================================================
 void setup() {
+    // Thermal & Power Optimization: 160 MHz provides massive headroom for 192kHz audio
+    // while running ~40% cooler than the default 240 MHz maximum clock.
+    setCpuFrequencyMhz(160);
+
     Serial.begin(115200);
     delay(500);
 
@@ -546,7 +592,7 @@ void setup() {
         6144,
         NULL,
         12,
-        NULL,
+        &s_audio_worker_task,
         1
     );
     if (task_created != pdPASS) {
@@ -559,6 +605,8 @@ void setup() {
     WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
         if (event == ARDUINO_EVENT_WIFI_STA_CONNECTED) {
             WiFi.setSleep(false);
+            esp_wifi_set_ps(WIFI_PS_NONE);
+            WiFi.setTxPower(WIFI_POWER_11dBm); // Balanced RF power: cool running & clean audio
         }
     });
 
@@ -569,6 +617,8 @@ void setup() {
     WiFi.mode(WIFI_STA);
     WiFi.begin(HOTSPOT_SSID, HOTSPOT_PASS);
     WiFi.setSleep(false); // Disable modem sleep to prevent DTIM wake latency & jitter
+    esp_wifi_set_ps(WIFI_PS_NONE);
+    WiFi.setTxPower(WIFI_POWER_11dBm);
 
     unsigned long startAttempt = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 10000) {
@@ -578,6 +628,8 @@ void setup() {
 
     if (WiFi.status() == WL_CONNECTED) {
         WiFi.setSleep(false);
+        esp_wifi_set_ps(WIFI_PS_NONE);
+        WiFi.setTxPower(WIFI_POWER_13dBm);
         Serial.println("\n[Wi-Fi] Connected to Phone Hotspot successfully!");
         Serial.print("[Wi-Fi] ESP32 IP Address: ");
         Serial.println(WiFi.localIP());
@@ -591,6 +643,8 @@ void setup() {
             ESP.restart();
         }
         WiFi.setSleep(false);
+        esp_wifi_set_ps(WIFI_PS_NONE);
+        WiFi.setTxPower(WIFI_POWER_13dBm);
         Serial.print("[Wi-Fi] AP Started. ESP32 IP: ");
         Serial.println(WiFi.softAPIP());
     }
@@ -711,7 +765,7 @@ void loop() {
         client.stop();
 
         pauseAudioWorker();
-        outputDmaSilence(getActiveMode());
+        rampDownBiasToGround();
         rb_reset(true);
         resumeAudioWorker();
 

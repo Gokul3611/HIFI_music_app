@@ -45,6 +45,7 @@ class CrossfadeEngine(
     context: Context,
     private val buildPlayer: () -> ExoPlayer,
     private val scope: CoroutineScope,
+    private val shouldManageAudioFocus: () -> Boolean = { true },
 ) {
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
@@ -77,6 +78,7 @@ class CrossfadeEngine(
     /** Internal for tests: [AudioFocusRequest]'s listener getter is hidden API. */
     @VisibleForTesting
     internal val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
+        if (!shouldManageAudioFocus()) return@OnAudioFocusChangeListener
         when (change) {
             AudioManager.AUDIOFOCUS_LOSS -> {
                 pausedForFocusLoss = false
@@ -212,7 +214,21 @@ class CrossfadeEngine(
         playerA.addListener(masterFocusListener)
     }
 
+    fun onAudioFocusPolicyChanged() {
+        if (!shouldManageAudioFocus()) {
+            pausedForFocusLoss = false
+            abandonFocus()
+            if (!transitioning) playerA.volume = 1f
+        } else if (playerA.playWhenReady || (transitioning && playerB.playWhenReady)) {
+            requestFocus()
+        }
+    }
+
     private fun requestFocus() {
+        if (!shouldManageAudioFocus()) {
+            abandonFocus()
+            return
+        }
         if (focusRequest != null) return
         val attrs = android.media.AudioAttributes.Builder()
             .setUsage(android.media.AudioAttributes.USAGE_MEDIA)

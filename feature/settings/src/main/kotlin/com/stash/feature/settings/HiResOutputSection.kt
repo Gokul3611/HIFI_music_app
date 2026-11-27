@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -25,9 +27,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,11 +41,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.stash.core.data.prefs.HiResOutputMode
@@ -64,12 +68,6 @@ fun HiResOutputRow(viewModel: HiResOutputViewModel = hiltViewModel()) {
     var sheetOpen by rememberSaveable { mutableStateOf(false) }
     var confirmBitPerfect by remember { mutableStateOf(false) }
     var showEsp32Guide by remember { mutableStateOf(false) }
-    var espIpInput by remember { mutableStateOf(Esp32SocketStreamer.espHost) }
-    var isDiscovering by remember { mutableStateOf(false) }
-    var isPinging by remember { mutableStateOf(false) }
-    var isSwitchingMode by remember { mutableStateOf(false) }
-    var verificationResultText by remember { mutableStateOf<String?>(null) }
-    val context = LocalContext.current
 
     val now = verdict
     val device = now?.deviceName
@@ -176,222 +174,284 @@ fun HiResOutputRow(viewModel: HiResOutputViewModel = hiltViewModel()) {
     }
 
     if (showEsp32Guide) {
-        AlertDialog(
-            onDismissRequest = { showEsp32Guide = false },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("ESP32 Hi-Fi Direct Stream", fontWeight = FontWeight.Bold)
-                }
+        Esp32ConnectDialog(
+            espStatus = espStatus,
+            onConnectAndStream = { cleanIp ->
+                Esp32SocketStreamer.espHost = cleanIp
+                Esp32SocketStreamer.close()
+                Esp32SocketStreamer.connect(cleanIp)
+                viewModel.setMode(HiResOutputMode.ESP32_WIFI_DIRECT)
+                showEsp32Guide = false
             },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // 1. LIVE HARDWARE STATUS CARD
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = when {
-                                espStatus.isConnected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                                espStatus.isHardwareVerified -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
-                                else -> MaterialTheme.colorScheme.surfaceVariant
-                            }
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            when {
-                                                espStatus.isConnected -> Color(0xFF2E7D32)
-                                                espStatus.isHardwareVerified -> Color(0xFFF57F17)
-                                                else -> Color(0xFFC62828)
-                                            }
-                                        )
-                                )
-                                Text(
-                                    text = when {
-                                        espStatus.isConnected -> "CONNECTED & READY"
-                                        espStatus.isHardwareVerified -> "REACHABLE ON NETWORK"
-                                        else -> "DISCONNECTED / UNVERIFIED"
-                                    },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = when {
-                                        espStatus.isConnected -> Color(0xFF2E7D32)
-                                        espStatus.isHardwareVerified -> Color(0xFFE65100)
-                                        else -> MaterialTheme.colorScheme.error
-                                    }
-                                )
-                            }
+            onDismiss = { showEsp32Guide = false },
+        )
+    }
+}
 
-                            Text(
-                                text = "Active Mode: ${espStatus.activeDacMode.label}",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.SemiBold,
-                            )
+@Composable
+private fun Esp32ConnectDialog(
+    espStatus: Esp32SocketStreamer.Esp32Status,
+    onConnectAndStream: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var espIpInput by rememberSaveable { mutableStateOf(Esp32SocketStreamer.espHost) }
+    var isDiscovering by remember { mutableStateOf(false) }
+    var isPinging by remember { mutableStateOf(false) }
+    var isSwitchingMode by remember { mutableStateOf(false) }
+    var verificationResultText by remember { mutableStateOf<String?>(null) }
 
-                            if (espStatus.latencyMs != null || espStatus.rssiDbm != null) {
-                                Text(
-                                    text = "Ping: ${espStatus.latencyMs ?: 0} ms · Wi-Fi Signal: ${espStatus.rssiDbm ?: -50} dBm",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
+    LaunchedEffect(Unit) {
+        val targetIp = espIpInput.trim().ifEmpty { Esp32SocketStreamer.espHost }
+        Esp32SocketStreamer.pingOrQueryStatus(targetIp)
+    }
 
-                            if (!espStatus.statusMessage.isNullOrEmpty()) {
-                                Text(
-                                    text = espStatus.statusMessage ?: "",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
+    val statusDotColor = when {
+        espStatus.isConnected -> Color(0xFF2E7D32)
+        espStatus.isHardwareVerified -> Color(0xFFF57F17)
+        else -> Color(0xFFC62828)
+    }
+    val statusHeadline = when {
+        espStatus.isConnected -> "CONNECTED & READY"
+        espStatus.isHardwareVerified -> "REACHABLE ON NETWORK"
+        else -> "DISCONNECTED / UNVERIFIED"
+    }
+    val statusHeadlineColor = when {
+        espStatus.isConnected -> Color(0xFF2E7D32)
+        espStatus.isHardwareVerified -> Color(0xFFE65100)
+        else -> MaterialTheme.colorScheme.error
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("ESP32 Hi-Fi Direct Stream", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // 1. LIVE HARDWARE STATUS CARD
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = when {
+                            espStatus.isConnected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                            espStatus.isHardwareVerified -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+                            else -> MaterialTheme.colorScheme.surfaceVariant
                         }
-                    }
-
-                    // 2. HARDWARE DAC MODE SELECTOR WITH INSTANT VERIFICATION
-                    Text(
-                        text = "1. Select Hardware DAC Mode (Two-Way ACK):",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        val isPcm = espStatus.activeDacMode == Esp32SocketStreamer.DacMode.PCM5102A
-                        Button(
-                            onClick = {
-                                isSwitchingMode = true
-                                verificationResultText = "Switching to PCM5102A..."
-                                Esp32SocketStreamer.switchDacMode(Esp32SocketStreamer.DacMode.PCM5102A) { success, msg ->
-                                    isSwitchingMode = false
-                                    verificationResultText = if (success) "✓ Confirmed by ESP32: PCM5102A 32-bit I2S Active" else msg
-                                }
-                            },
-                            enabled = !isSwitchingMode,
-                            colors = if (isPcm) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors(),
-                            modifier = Modifier.weight(1f),
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(statusDotColor)
+                            )
                             Text(
-                                text = if (isPcm) "✓ PCM5102A" else "PCM5102A",
-                                fontWeight = if (isPcm) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 12.sp,
+                                text = statusHeadline,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = statusHeadlineColor,
                             )
                         }
 
-                        val isInternal = espStatus.activeDacMode == Esp32SocketStreamer.DacMode.INTERNAL_DAC
-                        Button(
-                            onClick = {
-                                isSwitchingMode = true
-                                verificationResultText = "Switching to Built-in DAC..."
-                                Esp32SocketStreamer.switchDacMode(Esp32SocketStreamer.DacMode.INTERNAL_DAC) { success, msg ->
-                                    isSwitchingMode = false
-                                    verificationResultText = if (success) "✓ Confirmed by ESP32: Built-in DAC Active" else msg
-                                }
-                            },
-                            enabled = !isSwitchingMode,
-                            colors = if (isInternal) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors(),
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text(
-                                text = if (isInternal) "✓ Built-in" else "Built-in",
-                                fontWeight = if (isInternal) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 12.sp,
-                            )
-                        }
-                    }
-
-                    if (verificationResultText != null) {
                         Text(
-                            text = verificationResultText ?: "",
+                            text = "Active Mode: ${espStatus.activeDacMode.label}",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (verificationResultText?.startsWith("✓") == true) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
+                        )
+
+                        if (espStatus.latencyMs != null || espStatus.rssiDbm != null || espStatus.sampleRateHz != null || espStatus.bufferPct != null) {
+                            val telemetry = buildList {
+                                espStatus.latencyMs?.let { add("Ping: ${it}ms") }
+                                espStatus.rssiDbm?.let { add("Signal: ${it}dBm") }
+                                espStatus.sampleRateHz?.let { add("Rate: ${it}Hz") }
+                                espStatus.bufferPct?.let { add("Buffer: $it") }
+                            }.joinToString(" · ")
+                            Text(
+                                text = telemetry,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+
+                        val statusMsg = espStatus.statusMessage
+                        if (!statusMsg.isNullOrEmpty()) {
+                            Text(
+                                text = statusMsg,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
+                // 2. HARDWARE DAC MODE SELECTOR WITH INSTANT VERIFICATION
+                Text(
+                    text = "1. Select Hardware DAC Mode (Two-Way ACK):",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    val isPcm = espStatus.activeDacMode == Esp32SocketStreamer.DacMode.PCM5102A
+                    Button(
+                        onClick = {
+                            val targetIp = espIpInput.trim()
+                            if (targetIp.isNotEmpty()) Esp32SocketStreamer.espHost = targetIp
+                            isSwitchingMode = true
+                            verificationResultText = "Switching to PCM5102A..."
+                            Esp32SocketStreamer.switchDacMode(Esp32SocketStreamer.DacMode.PCM5102A) { success, msg ->
+                                isSwitchingMode = false
+                                verificationResultText = if (success) "✓ Confirmed by ESP32: PCM5102A 32-bit I2S Active" else msg
+                            }
+                        },
+                        enabled = !isSwitchingMode,
+                        colors = if (isPcm) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors(),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = if (isPcm) "✓ PCM5102A" else "PCM5102A",
+                            fontWeight = if (isPcm) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 12.sp,
                         )
                     }
 
-                    // 3. PING & TEST CONNECTION
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    val isInternal = espStatus.activeDacMode == Esp32SocketStreamer.DacMode.INTERNAL_DAC
+                    Button(
+                        onClick = {
+                            val targetIp = espIpInput.trim()
+                            if (targetIp.isNotEmpty()) Esp32SocketStreamer.espHost = targetIp
+                            isSwitchingMode = true
+                            verificationResultText = "Switching to Built-in DAC..."
+                            Esp32SocketStreamer.switchDacMode(Esp32SocketStreamer.DacMode.INTERNAL_DAC) { success, msg ->
+                                isSwitchingMode = false
+                                verificationResultText = if (success) "✓ Confirmed by ESP32: Built-in DAC Active" else msg
+                            }
+                        },
+                        enabled = !isSwitchingMode,
+                        colors = if (isInternal) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors(),
+                        modifier = Modifier.weight(1f),
                     ) {
-                        OutlinedButton(
-                            onClick = {
-                                isPinging = true
-                                verificationResultText = "Pinging ESP32..."
-                                val targetIp = espIpInput.trim().ifEmpty { Esp32SocketStreamer.espHost }
-                                Esp32SocketStreamer.pingOrQueryStatus(targetIp) { success, resultStatus ->
-                                    isPinging = false
-                                    verificationResultText = if (success) {
-                                        "✓ Pong in ${resultStatus.latencyMs}ms! Signal: ${resultStatus.rssiDbm ?: -50}dBm · Mode: ${resultStatus.activeDacMode.label}"
-                                    } else {
-                                        "❌ No response from $targetIp:8889. Ensure ESP32 is powered on."
-                                    }
-                                }
-                            },
-                            enabled = !isPinging,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text(if (isPinging) "Pinging..." else "⚡ Test Ping", fontSize = 12.sp)
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                isDiscovering = true
-                                verificationResultText = "Scanning network for ESP32..."
-                                Esp32SocketStreamer.discoverAndConnect(
-                                    onDiscovered = { ip ->
-                                        isDiscovering = false
-                                        espIpInput = ip
-                                        verificationResultText = "✓ Discovered ESP32 at $ip!"
-                                    },
-                                    onFailed = {
-                                        isDiscovering = false
-                                        verificationResultText = "❌ Discovery timed out. Check hotspot 'FBI-VAN'."
-                                    },
-                                )
-                            },
-                            enabled = !isDiscovering,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text(if (isDiscovering) "Scanning..." else "🔍 Discover", fontSize = 12.sp)
-                        }
+                        Text(
+                            text = if (isInternal) "✓ Built-in" else "Built-in",
+                            fontWeight = if (isInternal) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 12.sp,
+                        )
                     }
+                }
 
-                    // 4. MANUAL IP CONFIGURATION
-                    OutlinedTextField(
-                        value = espIpInput,
-                        onValueChange = { espIpInput = it },
-                        label = { Text("ESP32 IP Address") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
+                val resultText = verificationResultText
+                if (resultText != null) {
+                    Text(
+                        text = resultText,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (resultText.startsWith("✓")) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
                     )
                 }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    val cleanIp = espIpInput.trim().ifEmpty { "192.168.43.1" }
-                    Esp32SocketStreamer.espHost = cleanIp
-                    Esp32SocketStreamer.close()
-                    Esp32SocketStreamer.connect(cleanIp) { success, msg ->
-                        verificationResultText = msg
+
+                // 3. PING & TEST CONNECTION
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            val targetIp = espIpInput.trim().ifEmpty { Esp32SocketStreamer.espHost }
+                            Esp32SocketStreamer.espHost = targetIp
+                            isPinging = true
+                            verificationResultText = "Pinging ESP32..."
+                            Esp32SocketStreamer.pingOrQueryStatus(targetIp) { success, resultStatus ->
+                                isPinging = false
+                                verificationResultText = if (success) {
+                                    "✓ Pong in ${resultStatus.latencyMs}ms! Signal: ${resultStatus.rssiDbm ?: -50}dBm · Mode: ${resultStatus.activeDacMode.label}"
+                                } else {
+                                    "❌ No response from $targetIp:8889. Ensure ESP32 is powered on."
+                                }
+                            }
+                        },
+                        enabled = !isPinging,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(if (isPinging) "Pinging..." else "⚡ Test Ping", fontSize = 12.sp)
                     }
-                    viewModel.setMode(HiResOutputMode.ESP32_WIFI_DIRECT)
-                    showEsp32Guide = false
-                }) { Text("Connect & Stream") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEsp32Guide = false }) {
-                    Text(stringResource(R.string.settings_cancel))
+
+                    OutlinedButton(
+                        onClick = {
+                            isDiscovering = true
+                            verificationResultText = "Scanning network for ESP32..."
+                            Esp32SocketStreamer.discoverAndConnect(
+                                onDiscovered = { ip ->
+                                    isDiscovering = false
+                                    espIpInput = ip
+                                    verificationResultText = "✓ Discovered ESP32 at $ip!"
+                                },
+                                onFailed = {
+                                    isDiscovering = false
+                                    verificationResultText = "❌ Discovery timed out. Check hotspot 'FBI-VAN' or 'ESP32-HiFi-Hotspot'."
+                                },
+                            )
+                        },
+                        enabled = !isDiscovering,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(if (isDiscovering) "Scanning..." else "🔍 Discover", fontSize = 12.sp)
+                    }
                 }
-            },
-        )
-    }
+
+                // 4. STREAM VOLUME CONTROL
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "Stream Volume: ${(espStatus.volume * 100f).roundToInt()}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Slider(
+                        value = espStatus.volume,
+                        onValueChange = { Esp32SocketStreamer.setVolume(it) },
+                        valueRange = 0f..1f,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        text = "Independent ESP32 stream volume (isolated from phone speaker & notifications)",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                // 5. MANUAL IP CONFIGURATION
+                OutlinedTextField(
+                    value = espIpInput,
+                    onValueChange = { espIpInput = it },
+                    label = { Text("ESP32 IP Address") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                onConnectAndStream(espIpInput.trim().ifEmpty { "192.168.43.1" })
+            }) { Text("Connect & Stream") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.settings_cancel))
+            }
+        },
+    )
 }
