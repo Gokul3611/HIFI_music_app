@@ -200,7 +200,7 @@ class StashAudioOutput(
             if (consumed > 0) {
                 view.position(before)
                 view.limit(before + consumed)
-                Esp32SocketStreamer.writePcm(view, inFormat, streamSampleRate)
+                Esp32SocketStreamer.writePcm(view, inFormat, streamSampleRate, playerVolume)
                 framesWritten += consumed / inFrameSize
                 publishTuning()
             }

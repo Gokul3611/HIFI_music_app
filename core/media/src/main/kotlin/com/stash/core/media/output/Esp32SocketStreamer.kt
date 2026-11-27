@@ -55,6 +55,7 @@ object Esp32SocketStreamer {
         val bufferPct: String? = null,
         val statusMessage: String? = null,
         val lastVerifiedAt: Long = 0L,
+        val volume: Float = 1.0f,
     )
 
     private val _status = MutableStateFlow(Esp32Status())
@@ -63,6 +64,16 @@ object Esp32SocketStreamer {
     @Volatile var dacMode: DacMode = DacMode.PCM5102A
         private set
     private val modeSwitchGeneration = java.util.concurrent.atomic.AtomicLong()
+
+    @Volatile var volumeLevel: Float = 1.0f
+        private set
+    private var smoothedGain: Float = 1.0f
+
+    fun setVolume(level: Float) {
+        val clamped = level.coerceIn(0f, 1f)
+        volumeLevel = clamped
+        _status.value = _status.value.copy(volume = clamped)
+    }
 
     /**
      * Sends a hardware mode switch command to ESP32 with strict two-way ACK verification.
@@ -483,7 +494,7 @@ object Esp32SocketStreamer {
      * and writes directly to the ESP32 socket.
      */
     @Synchronized
-    fun writePcm(buffer: ByteBuffer, inFormat: SampleFormat, sampleRateHz: Int) {
+    fun writePcm(buffer: ByteBuffer, inFormat: SampleFormat, sampleRateHz: Int, playerGain: Float = 1f) {
         if (!isConnected.get()) {
             if (!isConnecting.get()) connect()
             if (!isConnecting.get()) return
@@ -494,12 +505,37 @@ object Esp32SocketStreamer {
             val remaining = view.remaining()
             if (remaining == 0) return
 
+            val level = volumeLevel.coerceIn(0f, 1f)
+            val targetGain = (level * level) * playerGain.coerceIn(0f, 1f) // Quadratic perceptual curve
+            val unityGain = targetGain >= 0.9999f && smoothedGain >= 0.9999f
+            if (unityGain) smoothedGain = 1.0f
+
             val byteCount: Int
             when (inFormat) {
                 SampleFormat.INT32 -> {
                     byteCount = remaining
                     ensureBuffer(byteCount)
                     view.get(outBytes, 0, byteCount)
+                    if (!unityGain) {
+                        val sampleCount = byteCount / 4
+                        val step = 1f / sampleCount.coerceAtLeast(1)
+                        var idx = 0
+                        for (i in 0 until sampleCount) {
+                            smoothedGain += (targetGain - smoothedGain) * step.coerceAtLeast(0.01f)
+                            val raw = (outBytes[idx].toInt() and 0xFF) or
+                                ((outBytes[idx + 1].toInt() and 0xFF) shl 8) or
+                                ((outBytes[idx + 2].toInt() and 0xFF) shl 16) or
+                                (outBytes[idx + 3].toInt() shl 24)
+                            val v = (raw.toDouble() * smoothedGain).toLong()
+                                .coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
+                            outBytes[idx] = (v and 0xFF).toByte()
+                            outBytes[idx + 1] = ((v ushr 8) and 0xFF).toByte()
+                            outBytes[idx + 2] = ((v ushr 16) and 0xFF).toByte()
+                            outBytes[idx + 3] = ((v ushr 24) and 0xFF).toByte()
+                            idx += 4
+                        }
+                        smoothedGain = targetGain
+                    }
                 }
                 SampleFormat.FLOAT -> {
                     val sampleCount = remaining / 4
@@ -508,13 +544,15 @@ object Esp32SocketStreamer {
                     val floats = view.asFloatBuffer()
                     var outIdx = 0
                     for (i in 0 until sampleCount) {
-                        val s = floats.get(i).coerceIn(-1.0f, 1.0f)
+                        if (!unityGain) smoothedGain += (targetGain - smoothedGain) * 0.01f
+                        val s = (floats.get(i) * (if (unityGain) 1f else smoothedGain)).coerceIn(-1.0f, 1.0f)
                         val v = (s * 2147483647.0).toInt()
                         outBytes[outIdx++] = (v and 0xFF).toByte()
                         outBytes[outIdx++] = ((v ushr 8) and 0xFF).toByte()
                         outBytes[outIdx++] = ((v ushr 16) and 0xFF).toByte()
                         outBytes[outIdx++] = ((v ushr 24) and 0xFF).toByte()
                     }
+                    if (!unityGain) smoothedGain = targetGain
                 }
                 SampleFormat.INT24 -> {
                     val sampleCount = remaining / 3
@@ -523,12 +561,26 @@ object Esp32SocketStreamer {
                     var pos = view.position()
                     var outIdx = 0
                     for (i in 0 until sampleCount) {
-                        outBytes[outIdx++] = 0.toByte() // Pad LSB with 0x00 for 32-bit slot
-                        outBytes[outIdx++] = view.get(pos)
-                        outBytes[outIdx++] = view.get(pos + 1)
-                        outBytes[outIdx++] = view.get(pos + 2)
+                        if (unityGain) {
+                            outBytes[outIdx++] = 0.toByte() // Pad LSB with 0x00 for 32-bit slot
+                            outBytes[outIdx++] = view.get(pos)
+                            outBytes[outIdx++] = view.get(pos + 1)
+                            outBytes[outIdx++] = view.get(pos + 2)
+                        } else {
+                            smoothedGain += (targetGain - smoothedGain) * 0.01f
+                            val raw = ((view.get(pos).toInt() and 0xFF) shl 8) or
+                                ((view.get(pos + 1).toInt() and 0xFF) shl 16) or
+                                (view.get(pos + 2).toInt() shl 24)
+                            val v = (raw.toDouble() * smoothedGain).toLong()
+                                .coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
+                            outBytes[outIdx++] = (v and 0xFF).toByte()
+                            outBytes[outIdx++] = ((v ushr 8) and 0xFF).toByte()
+                            outBytes[outIdx++] = ((v ushr 16) and 0xFF).toByte()
+                            outBytes[outIdx++] = ((v ushr 24) and 0xFF).toByte()
+                        }
                         pos += 3
                     }
+                    if (!unityGain) smoothedGain = targetGain
                 }
                 SampleFormat.INT16 -> {
                     val sampleCount = remaining / 2
@@ -537,12 +589,20 @@ object Esp32SocketStreamer {
                     val shorts = view.asShortBuffer()
                     var outIdx = 0
                     for (i in 0 until sampleCount) {
-                        val v = shorts.get(i).toInt() shl 16
-                        outBytes[outIdx++] = 0.toByte()
-                        outBytes[outIdx++] = 0.toByte()
+                        val raw = shorts.get(i).toInt() shl 16
+                        val v = if (unityGain) {
+                            raw
+                        } else {
+                            smoothedGain += (targetGain - smoothedGain) * 0.01f
+                            (raw.toDouble() * smoothedGain).toLong()
+                                .coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
+                        }
+                        outBytes[outIdx++] = ((v and 0xFF)).toByte()
+                        outBytes[outIdx++] = ((v ushr 8) and 0xFF).toByte()
                         outBytes[outIdx++] = ((v ushr 16) and 0xFF).toByte()
                         outBytes[outIdx++] = ((v ushr 24) and 0xFF).toByte()
                     }
+                    if (!unityGain) smoothedGain = targetGain
                 }
             }
 

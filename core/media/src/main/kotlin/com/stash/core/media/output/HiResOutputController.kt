@@ -1,6 +1,9 @@
 package com.stash.core.media.output
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioAttributes
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
@@ -262,6 +265,34 @@ class HiResOutputController @Inject constructor(
             },
             Handler(Looper.getMainLooper()),
         )
+        runCatching {
+            val filter = IntentFilter("android.media.VOLUME_CHANGED_ACTION")
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(ctx: Context?, intent: Intent?) {
+                    if (mode != HiResOutputMode.ESP32_WIFI_DIRECT) return
+                    val streamType = intent?.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", -1) ?: -1
+                    if (streamType == AudioManager.STREAM_MUSIC) {
+                        syncEsp32VolumeFromSystem()
+                    }
+                }
+            }
+            if (Build.VERSION.SDK_INT >= 33) {
+                context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                @Suppress("UnspecifiedRegisterReceiverFlag")
+                context.registerReceiver(receiver, filter)
+            }
+        }
+    }
+
+    private fun syncEsp32VolumeFromSystem() {
+        runCatching {
+            val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            if (max > 0) {
+                val current = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                Esp32SocketStreamer.setVolume(current.toFloat() / max.toFloat())
+            }
+        }
     }
 
     /**
@@ -417,6 +448,7 @@ class HiResOutputController @Inject constructor(
         mode = newMode
         _modeFlow.value = newMode
         if (newMode == HiResOutputMode.STANDARD || newMode == HiResOutputMode.ESP32_WIFI_DIRECT) releaseAll()
+        if (newMode == HiResOutputMode.ESP32_WIFI_DIRECT) syncEsp32VolumeFromSystem()
         // A new mode asks for different things: let refused configurations be tried again.
         refusals.clear()
         recheckLiveOutputs()

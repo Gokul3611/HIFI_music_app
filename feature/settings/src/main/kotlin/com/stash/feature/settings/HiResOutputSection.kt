@@ -27,6 +27,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -44,6 +45,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.stash.core.data.prefs.HiResOutputMode
@@ -410,7 +412,28 @@ private fun Esp32ConnectDialog(
                     }
                 }
 
-                // 4. MANUAL IP CONFIGURATION
+                // 4. STREAM VOLUME CONTROL
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "Stream Volume: ${(espStatus.volume * 100f).roundToInt()}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Slider(
+                        value = espStatus.volume,
+                        onValueChange = { Esp32SocketStreamer.setVolume(it) },
+                        valueRange = 0f..1f,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        text = "Also controlled by your phone's physical volume buttons",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                // 5. MANUAL IP CONFIGURATION
                 OutlinedTextField(
                     value = espIpInput,
                     onValueChange = { espIpInput = it },
