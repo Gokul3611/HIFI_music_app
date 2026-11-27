@@ -513,7 +513,9 @@ object Esp32SocketStreamer {
             val byteCount: Int
             when (inFormat) {
                 SampleFormat.INT32 -> {
-                    byteCount = remaining
+                    val frameCount = remaining / 8
+                    byteCount = frameCount * 8
+                    if (byteCount == 0) return
                     ensureBuffer(byteCount)
                     view.get(outBytes, 0, byteCount)
                     if (!unityGain) {
@@ -538,8 +540,10 @@ object Esp32SocketStreamer {
                     }
                 }
                 SampleFormat.FLOAT -> {
-                    val sampleCount = remaining / 4
+                    val frameCount = remaining / 8
+                    val sampleCount = frameCount * 2
                     byteCount = sampleCount * 4
+                    if (byteCount == 0) return
                     ensureBuffer(byteCount)
                     val floats = view.asFloatBuffer()
                     var outIdx = 0
@@ -555,8 +559,10 @@ object Esp32SocketStreamer {
                     if (!unityGain) smoothedGain = targetGain
                 }
                 SampleFormat.INT24 -> {
-                    val sampleCount = remaining / 3
+                    val frameCount = remaining / 6
+                    val sampleCount = frameCount * 2
                     byteCount = sampleCount * 4
+                    if (byteCount == 0) return
                     ensureBuffer(byteCount)
                     var pos = view.position()
                     var outIdx = 0
@@ -583,8 +589,10 @@ object Esp32SocketStreamer {
                     if (!unityGain) smoothedGain = targetGain
                 }
                 SampleFormat.INT16 -> {
-                    val sampleCount = remaining / 2
+                    val frameCount = remaining / 4
+                    val sampleCount = frameCount * 2
                     byteCount = sampleCount * 4
+                    if (byteCount == 0) return
                     ensureBuffer(byteCount)
                     val shorts = view.asShortBuffer()
                     var outIdx = 0
@@ -627,6 +635,11 @@ object Esp32SocketStreamer {
 
     fun clearPendingAudio() {
         sendQueue.clear()
+        scope.launch {
+            runCatching {
+                requestUdpCommand(espHost, "FLUSH", timeoutMs = 300)
+            }
+        }
     }
 
     fun close() = closeConnection()
