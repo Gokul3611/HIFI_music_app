@@ -199,6 +199,21 @@ class AllSongsViewModel @Inject constructor(
         viewModelScope.launch { player.setQueue(queue, 0, PlaybackSource.AllSongs) }
     }
 
+    /** AI Smart Shuffle: sequences songs into a smooth vibe flow. */
+    fun shuffleAi() {
+        val all = songs.value
+        if (all.isEmpty()) return
+        viewModelScope.launch {
+            val current = player.playerState.value.currentTrack
+            val chained = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                runCatching {
+                    com.stash.core.media.recommendation.LocalRecommendationEngine().sequenceVibeChain(all, current)
+                }.getOrElse { all.shuffled() }
+            }
+            player.setQueue(chained, 0, PlaybackSource.AllSongs)
+        }
+    }
+
     /** Each lands right after the playing song; going backwards keeps the selection's order. */
     fun playNext(tracks: List<Track>) {
         if (tracks.isEmpty()) return

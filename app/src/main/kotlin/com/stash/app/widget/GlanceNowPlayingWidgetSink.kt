@@ -53,13 +53,17 @@ class GlanceNowPlayingWidgetSink @Inject constructor(
                 }
                 // The text first, whatever the cover is doing.
                 if (changed) redraw()
+                coverRequests.trySend(Unit)
             }
+        }
+        scope.launch {
+            for (request in coverRequests) refreshCover()
         }
     }
 
-    /** The widget was drawn: covers are bypassed in ultra-low-power mode. */
+    /** The widget was drawn (it may lack its cover): fetch the stored song's cover if it's missing. */
     fun requestCover() {
-        // No-op: album covers are eliminated from the widget to save power and memory
+        coverRequests.trySend(Unit)
     }
 
     /**

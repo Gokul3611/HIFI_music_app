@@ -227,10 +227,9 @@ android {
             buildConfigField("String", "SYNC_BASE_URL", "\"$syncReleaseBaseUrl\"")
             buildConfigField("Boolean", "WEB_LINK_ENABLED", "false")
             manifestPlaceholders["webLinkEnabled"] = "false"
-            // 64-bit ARM only in the release APK (arm64-v8a). 32-bit armeabi-v7a was ~36 MB of duplicate
-            // native binaries (ffmpeg, python) for legacy 2014-2016 CPUs. All modern Android 10+ devices
-            // run arm64-v8a. Dropping armeabi-v7a cuts APK size from ~74 MB to ~38 MB.
-            ndk { abiFilters += listOf("arm64-v8a") }
+            // Dual-architecture release APK (arm64-v8a + armeabi-v7a) supporting both modern 64-bit devices
+            // and legacy 32-bit devices while keeping total APK size comfortably below the 80 MB limit.
+            ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
             // R8 shrinks the release build: it drops the code and resources nothing uses (most of
             // material-icons-extended, unused library code) and optimizes the rest, but renames
             // nothing (-dontobfuscate). app/proguard-rules.pro says why each keep rule is there; a

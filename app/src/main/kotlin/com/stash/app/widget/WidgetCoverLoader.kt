@@ -116,14 +116,14 @@ class WidgetCoverLoader @Inject constructor(
         private const val TAG = "StashWidget"
 
         /**
-         * The widget cover's edge. A 2×2 cover is about 150 dp; 256 px keeps it sharp enough on the
-         * small 4×1 cover and under 256 KB per copy in the RemoteViews.
+         * The widget cover's edge. 160 px in RGB_565 (~50 KB) keeps it crisp on both
+         * 4x1 and 2x2 widgets while staying well under Android's RemoteViews bitmap cap.
          */
-        const val COVER_PX = 256
+        const val COVER_PX = 160
 
         private const val TIMEOUT_MS = 8_000L
 
-        /** The centre square of [source], scaled down to at most [maxPx]; [source] itself when it already fits. */
+        /** The centre square of [source], scaled down to at most [maxPx] in RGB_565 for low widget IPC memory. */
         internal fun squareCrop(source: Bitmap, maxPx: Int): Bitmap {
             val side = min(source.width, source.height)
             val cropped = if (source.width == source.height) {
@@ -131,7 +131,12 @@ class WidgetCoverLoader @Inject constructor(
             } else {
                 Bitmap.createBitmap(source, (source.width - side) / 2, (source.height - side) / 2, side, side)
             }
-            return if (side <= maxPx) cropped else Bitmap.createScaledBitmap(cropped, maxPx, maxPx, true)
+            val scaled = if (side <= maxPx) cropped else Bitmap.createScaledBitmap(cropped, maxPx, maxPx, true)
+            return if (scaled.config == Bitmap.Config.RGB_565) {
+                scaled
+            } else {
+                scaled.copy(Bitmap.Config.RGB_565, false) ?: scaled
+            }
         }
     }
 }

@@ -120,6 +120,8 @@ class LibraryViewModel @Inject constructor(
     private val libraryScopePreference: com.stash.core.data.prefs.LibraryScopePreference? = null,
     /** Start radio from a song's menu (null in tests that don't need it). */
     private val radioStarter: com.stash.core.media.RadioStarter? = null,
+    private val localRecommendationEngine: com.stash.core.media.recommendation.LocalRecommendationEngine =
+        com.stash.core.media.recommendation.LocalRecommendationEngine(),
 ) : ViewModel() {
 
     /** The playlist mirrors with Stash on the web: deleting it asks Everywhere / Only here (spec §2.4). */
@@ -660,6 +662,23 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    /** AI Smart Shuffle: sequences liked songs into a coherent genre/vibe flow. */
+    fun shuffleLikedAi() {
+        viewModelScope.launch {
+            val all = likedTracks.value
+            if (all.isEmpty()) return@launch
+            val seed = playerRepository.playerState.value.currentTrack
+            val chained = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                runCatching { localRecommendationEngine.sequenceVibeChain(all, seed) }.getOrElse { all.shuffled() }
+            }
+            playerRepository.setQueue(
+                chained,
+                0,
+                source = com.stash.core.model.PlaybackSource.Liked(likedFilter.value.name),
+            )
+        }
+    }
+
     // ── Public actions ───────────────────────────────────────────────────
 
     /** Switch the active content tab. */
@@ -932,11 +951,32 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    /** AI Smart Shuffle: sequences downloaded library tracks into a coherent genre/vibe flow. */
+    fun shuffleLibraryAi() {
+        viewModelScope.launch {
+            if (!playerRepository.shuffleLibraryAi()) {
+                _userMessages.tryEmit("Nothing downloaded to shuffle yet — download some songs first.")
+            }
+        }
+    }
+
     /** Shuffle exactly what Songs shows (Stream-only mode, where the list includes online rows). */
     fun shuffleVisible(tracks: List<Track>) {
         viewModelScope.launch {
             if (tracks.isEmpty()) return@launch
             playerRepository.setQueue(tracks.shuffled(), 0, source = com.stash.core.model.PlaybackSource.Library)
+        }
+    }
+
+    /** AI Smart Shuffle for visible tracks in stream-only mode. */
+    fun shuffleVisibleAi(tracks: List<Track>) {
+        viewModelScope.launch {
+            if (tracks.isEmpty()) return@launch
+            val seed = playerRepository.playerState.value.currentTrack
+            val chained = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                runCatching { localRecommendationEngine.sequenceVibeChain(tracks, seed) }.getOrElse { tracks.shuffled() }
+            }
+            playerRepository.setQueue(chained, 0, source = com.stash.core.model.PlaybackSource.Library)
         }
     }
 

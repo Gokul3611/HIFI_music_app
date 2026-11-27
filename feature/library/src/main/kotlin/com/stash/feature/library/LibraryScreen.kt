@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -271,8 +272,13 @@ fun LibraryScreen(
             onShuffleLibrary = {
                 if (state.streamingMode) viewModel.shuffleVisible(state.tracks) else viewModel.shuffleLibrary()
             },
+            onAiShuffleLibrary = {
+                if (state.streamingMode) viewModel.shuffleVisibleAi(state.tracks) else viewModel.shuffleLibraryAi()
+            },
             onShuffleLiked = viewModel::shuffleLiked,
+            onAiShuffleLiked = viewModel::shuffleLikedAi,
             onShuffleDevice = deviceViewModel::shuffle,
+            onAiShuffleDevice = deviceViewModel::shuffleAi,
             onTabSelected = viewModel::selectTab,
             onSearchQueryChanged = viewModel::setSearchQuery,
             onSortOrderChanged = viewModel::setSortOrder,
@@ -589,8 +595,11 @@ private fun LibraryContent(
     searchQuery: String,
     importState: com.stash.data.download.files.LocalImportState,
     onShuffleLibrary: () -> Unit,
+    onAiShuffleLibrary: () -> Unit = {},
     onShuffleLiked: () -> Unit,
+    onAiShuffleLiked: () -> Unit = {},
     onShuffleDevice: () -> Unit,
+    onAiShuffleDevice: () -> Unit = {},
     onTabSelected: (LibraryTab) -> Unit,
     onSearchQueryChanged: (String) -> Unit,
     onSortOrderChanged: (SortOrder) -> Unit,
@@ -758,6 +767,23 @@ private fun LibraryContent(
                         likedTabActive -> "Shuffle liked songs"
                         deviceTabActive -> "Shuffle songs on this device"
                         else -> "Shuffle library"
+                    },
+                    tint = chrome.accent,
+                )
+            }
+            IconButton(
+                onClick = when {
+                    likedTabActive -> onAiShuffleLiked
+                    deviceTabActive -> onAiShuffleDevice
+                    else -> onAiShuffleLibrary
+                },
+            ) {
+                Icon(
+                    Icons.Filled.AutoAwesome,
+                    contentDescription = when {
+                        likedTabActive -> "AI vibe shuffle liked songs"
+                        deviceTabActive -> "AI vibe shuffle songs on this device"
+                        else -> "AI vibe shuffle library"
                     },
                     tint = chrome.accent,
                 )
