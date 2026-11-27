@@ -1,16 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The square "Now playing" widget: 2x2 by default, resizable. Pushed updates only (see the wide one). -->
+<!-- The square "Now playing" widget: 2x2 by default, resizable. Pushed updates only. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_now_playing_square_description"
     android:initialLayout="@layout/glance_default_loading_layout"
-    android:minWidth="110dp"
-    android:minHeight="110dp"
-    android:minResizeWidth="110dp"
-    android:minResizeHeight="110dp"
+    android:minWidth="@dimen/widget_now_playing_square_min_width"
+    android:minHeight="@dimen/widget_now_playing_square_min_height"
+    android:minResizeWidth="@dimen/widget_now_playing_square_min_resize_width"
+    android:minResizeHeight="@dimen/widget_now_playing_square_min_resize_height"
+    android:maxResizeWidth="@dimen/widget_now_playing_square_max_resize_width"
+    android:maxResizeHeight="@dimen/widget_now_playing_square_max_resize_height"
     android:previewImage="@drawable/widget_preview_square_image"
     android:previewLayout="@layout/widget_preview_square"
     android:resizeMode="horizontal|vertical"
-    android:targetCellWidth="2"
-    android:targetCellHeight="2"
+    android:targetCellWidth="@integer/widget_now_playing_square_target_cell_width"
+    android:targetCellHeight="@integer/widget_now_playing_square_target_cell_height"
     android:updatePeriodMillis="0"
-    android:widgetCategory="home_screen" />
+    android:widgetCategory="home_screen|keyguard" />
