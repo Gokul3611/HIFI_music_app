@@ -207,15 +207,18 @@ static bool isSupportedSampleRate(uint32_t sample_rate) {
  *   - For Internal DAC: writes mid-scale 0x8000 (1.65 V DC mid-rail) during active stream
  *     prebuffering/starvation so voltage does not fluctuate or cause zipper scratching.
  */
-static void outputDmaSilence(uint8_t mode) {
+static void outputDmaSilence(uint8_t mode, bool flushAllDescriptors = false) {
     if (mode == MODE_INTERNAL_ESP32_DAC) {
-        uint16_t silence[64];
         uint16_t bias = (s_active_bias > 0) ? 0x8000 : 0x0000;
-        for (size_t i = 0; i < 64; i++) {
-            silence[i] = bias;
+        const size_t sample_count = DMA_CHUNK_SIZE / sizeof(int32_t); // 512 samples = 1024 bytes
+        for (size_t i = 0; i < sample_count; i++) {
+            s_dac_chunk[i] = bias;
         }
+        const int passes = flushAllDescriptors ? 16 : 1; // 16 * 1024 B = 16 KB (> 8 * 1920 B DMA ring)
         size_t written = 0;
-        i2s_write(I2S_PORT, silence, sizeof(silence), &written, pdMS_TO_TICKS(10));
+        for (int p = 0; p < passes; p++) {
+            i2s_write(I2S_PORT, s_dac_chunk, sample_count * sizeof(uint16_t), &written, pdMS_TO_TICKS(20));
+        }
     } else {
         i2s_zero_dma_buffer(I2S_PORT);
     }
@@ -254,8 +257,8 @@ static esp_err_t installI2SHardware(uint8_t mode, uint32_t sample_rate) {
         i2s_config.communication_format = I2S_COMM_FORMAT_STAND_I2S;
         i2s_config.use_apll = true;
     } else {
-        // Auto-clear DMA descriptors to prevent repeating stale audio on underrun
-        i2s_config.tx_desc_auto_clear = true;
+        // Keep tx_desc_auto_clear false in internal DAC mode so DMA never drops to 0x0000 (0V buzz/thump)
+        i2s_config.tx_desc_auto_clear = false;
         i2s_config.mode = (i2s_mode_t)(i2s_config.mode | I2S_MODE_DAC_BUILT_IN);
         i2s_config.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
         i2s_config.communication_format = I2S_COMM_FORMAT_STAND_MSB;
@@ -279,7 +282,7 @@ static esp_err_t installI2SHardware(uint8_t mode, uint32_t sample_rate) {
     }
 
     if (error == ESP_OK) {
-        outputDmaSilence(mode);
+        outputDmaSilence(mode, true);
     } else {
         i2s_set_dac_mode(I2S_DAC_CHANNEL_DISABLE);
         i2s_driver_uninstall(I2S_PORT);
@@ -304,7 +307,7 @@ static bool configureI2SHardware(uint8_t new_mode, uint32_t new_sample_rate) {
 
     // Fast Pop-Free Rate Switching (no driver reinstall if mode is unchanged)
     if (s_i2s_initialized && new_mode == s_active_mode) {
-        outputDmaSilence(new_mode);
+        outputDmaSilence(new_mode, true);
         i2s_bits_per_sample_t bits = (new_mode == MODE_EXTERNAL_PCM5102A) 
             ? I2S_BITS_PER_SAMPLE_32BIT 
             : I2S_BITS_PER_SAMPLE_16BIT;
@@ -385,18 +388,22 @@ void audioWorkerTask(void *param) {
         // Anti-crackle pre-buffering: ensure adaptive cushion before draining ring buffer
         if (s_prebuffering) {
             if (available < watermark) {
-                outputDmaSilence(mode);
-                vTaskDelay(pdMS_TO_TICKS(2));
+                outputDmaSilence(mode, false);
+                if (mode != MODE_INTERNAL_ESP32_DAC) {
+                    vTaskDelay(pdMS_TO_TICKS(2));
+                }
                 continue;
             }
             s_prebuffering = false;
         }
 
-        // Buffer starvation protection: if drained below chunk size, output silence and pre-buffer again
+        // Buffer starvation protection: flush all DMA descriptors with clean silence before pre-buffering again
         if (available < DMA_CHUNK_SIZE) {
             s_prebuffering = true;
-            outputDmaSilence(mode);
-            vTaskDelay(pdMS_TO_TICKS(2));
+            outputDmaSilence(mode, true);
+            if (mode != MODE_INTERNAL_ESP32_DAC) {
+                vTaskDelay(pdMS_TO_TICKS(2));
+            }
             continue;
         }
 

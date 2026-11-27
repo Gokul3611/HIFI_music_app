@@ -834,8 +834,16 @@ class StashPlaybackService : MediaLibraryService() {
             context = this,
             buildPlayer = { buildExoPlayer(mediaSourceFactory, audioAttributes) },
             scope = serviceScope,
+            shouldManageAudioFocus = {
+                hiResOutputController.mode != com.stash.core.data.prefs.HiResOutputMode.ESP32_WIFI_DIRECT
+            },
         )
         engine.initialize()
+        serviceScope.launch {
+            hiResOutputController.modeFlow.collect {
+                engine.onAudioFocusPolicyChanged()
+            }
+        }
         crossfadeEngine = engine
         // Listen Together: focus pauses bypass ListenTogetherPlayer AND carry no focus reason (see the
         // CrossfadeEngine hooks). Outside a session events is null, so these do nothing.

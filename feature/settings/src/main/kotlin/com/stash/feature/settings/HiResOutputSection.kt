@@ -426,7 +426,7 @@ private fun Esp32ConnectDialog(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(
-                        text = "Also controlled by your phone's physical volume buttons",
+                        text = "Independent ESP32 stream volume (isolated from phone speaker & notifications)",
                         style = MaterialTheme.typography.bodySmall,
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
