@@ -59,6 +59,12 @@ target_link_options(stash_tuning PRIVATE
     -flto
 )
 
+# On Windows, CMake/NDK may invoke clang++.exe via its 8.3 short name (CLANG_~1.EXE),
+# which hides the "++" suffix and causes Clang to run in C mode instead of C++ mode.
+if(CMAKE_HOST_WIN32)
+    target_link_options(stash_tuning PRIVATE --driver-mode=g++)
+endif()
+
 # NEON: always there on arm64; on armeabi-v7a the NDK has enabled it by default since r21, said
 # again here so the engine never silently builds without it.
 if(ANDROID_ABI STREQUAL "armeabi-v7a")
