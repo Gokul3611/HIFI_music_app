@@ -149,25 +149,25 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/master'
         with:
-          tag_name: v0.9.139
-          name: "Music Hi-Fi v0.9.139"
+          tag_name: v0.9.140
+          name: "Music Hi-Fi v0.9.140"
           body: |
             <!-- stash-app
             Official update from Gokul (Developer). Safe to install!
-            - 50% APK Size Cut | Dropped legacy 32-bit armeabi-v7a native binaries; APK cut from 74 MB to 44 MB for modern arm64-v8a devices.
-            - Ultra-Low-Power Widget | Headless background launcher widget playback with full Previous/Play/Pause/Next controls and zero UI launch overhead.
-            - Instant Navigation | Removed transition latency for instantaneous library browsing, pre-warmed player sheets, and low-latency 50ms buffer start.
-            - Bit-Perfect Continuity | Complete preservation of 24-bit bit-perfect DSP and ESP32 SoftAP Wi-Fi DAC streaming.
+            - AI Smart Shuffle & Vibe Continuity | New AI Shuffle button beside classic Shuffle with strict genre/mood clustering and O(N) non-blocking engine.
+            - ESP32 Hi-Fi Audio Isolation & Firmware | Isolated PCM stream from system notifications, pop-free 1.65V bias ramp, 160MHz cooling optimization, and instant UDP FLUSH on seek.
+            - Glance Widget Redesign | Responsive Jetpack Glance layout with low-memory RGB_565 squircle art and crash-proof zero-bitmap fallback.
+            - Dual ARM ABI Support | Full 64-bit arm64-v8a and 32-bit armeabi-v7a support under 80 MB (~70.5 MB).
             -->
-            ### 🎵 Music Hi-Fi v0.9.139 - Official Release
+            ### 🎵 Music Hi-Fi v0.9.140 - Official Release
 
-            > **📢 Notice from Gokul:** This release drastically reduces app size by nearly 50% (~44 MB, down from ~74 MB) and adds ultra-low-power launcher widget playback controls and instantaneous UI navigation!
+            > **📢 Notice from Gokul:** This major release introduces **AI Smart Shuffle with Vibe Continuity**, a **redesigned crash-proof home widget**, **isolated ESP32 Wi-Fi DAC streaming with pop-free firmware**, and **full 32-bit/64-bit ARM support**!
 
             #### 🌟 Highlights & What's New:
-            - **📦 50% Smaller Download**: Removed duplicate legacy 32-bit native libraries (FFmpeg/Python) while keeping complete 64-bit ARM (`arm64-v8a`) compatibility for all modern Android 10+ devices.
-            - **⚡ Instantaneous UI Transitions**: Stripped navigation delays for click-to-open responsiveness, pre-warmed Now Playing bottom sheets, and optimized 50ms playback startup buffer.
-            - **🔋 Ultra-Low-Power Launcher Widget**: Direct headless service transport with Previous [⏮], Play/Pause [⏯], and Next [⏭] controls that run without waking foreground activities.
-            - **🎛️ Bit-Perfect Audio & ESP32 DAC Engine**: Native bit-perfect DSP pipeline and wireless ESP32 SoftAP DAC streamer remain 100% intact and uncompromised.
+            - **✨ AI Smart Shuffle & Vibe Continuity**: Dedicated AI Shuffle button beside classic Shuffle across Library, Liked Songs, and Device tabs. Clusters tracks by musical mood so romantic/acoustic sessions never jump abruptly to rock or metal.
+            - **📡 ESP32 Firmware & Audio Isolation**: Phone notifications, alarms, and videos no longer interrupt ESP32 wireless playback. Includes pop-free 0V→1.65V bias ramping, 160MHz thermal optimization, hardware-synced perceptual volume, and instant UDP `FLUSH` on seek.
+            - **📱 Jetpack Glance Widget Redesign**: Canonical responsive widget layout with 160px `RGB_565` squircle art and zero-bitmap error fallback.
+            - **📦 Dual ARM ABI Support**: Ships both `arm64-v8a` and `armeabi-v7a` (~70.5 MB) for compatibility across all Android devices.
             - **🔄 Seamless In-App Updates**: Built with package identity `com.stash.app.debug` to update smoothly over your existing install without losing any library data.
 
             #### 📦 Download:
